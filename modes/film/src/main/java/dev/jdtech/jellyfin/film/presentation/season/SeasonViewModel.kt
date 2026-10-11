@@ -22,6 +22,8 @@ import kotlinx.coroutines.launch
 import org.jellyfin.sdk.model.api.ItemFields
 import timber.log.Timber
 
+internal val seasonEpisodeFields = listOf(ItemFields.OVERVIEW, ItemFields.CAN_DOWNLOAD)
+
 @HiltViewModel
 class SeasonViewModel
 @Inject
@@ -82,7 +84,7 @@ constructor(
                     repository.getEpisodes(
                         seriesId = season.seriesId,
                         seasonId = seasonId,
-                        fields = listOf(ItemFields.OVERVIEW),
+                        fields = seasonEpisodeFields,
                         offline = downloadsOnly,
                     )
                 _state.emit(
