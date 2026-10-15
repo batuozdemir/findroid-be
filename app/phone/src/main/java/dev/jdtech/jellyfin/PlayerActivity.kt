@@ -282,6 +282,14 @@ class PlayerActivity : BasePlayerActivity() {
                     }
                 }
 
+                // Keeps the position used for the stop report on next/previous within a second.
+                launch {
+                    while (true) {
+                        viewModel.refreshPlayingSnapshot()
+                        delay(1000L)
+                    }
+                }
+
                 if (viewModel.shouldPollSegments()) {
                     launch {
                         while (true) {

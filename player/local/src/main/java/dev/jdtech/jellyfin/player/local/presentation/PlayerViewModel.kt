@@ -152,6 +152,20 @@ constructor(
     // until the callback fires rather than being cleared right after the seek call.
     private var pendingAutoAdvanceSeek = false
 
+    /**
+     * The item the server was told is playing, with the last known position and duration. Used to
+     * report playback stopped for the item being left when [onMediaItemTransition] fires, which
+     * covers every item change (auto-advance, next/previous buttons, gestures, media-session and
+     * remote controls, the outro "Next episode" button) on both backends.
+     *
+     * `null` before the first transition, after [releasePlayer], and after the still-watching
+     * prompt already reported the finished item (so the transition that follows does not report it
+     * again).
+     */
+    private data class PlayingSnapshot(val itemId: UUID, val positionMs: Long, val durationMs: Long)
+
+    private var playing: PlayingSnapshot? = null
+
     init {
         maxBitrate = appPreferences.getValue(appPreferences.playerMaxBitrate)
 
@@ -358,9 +372,11 @@ constructor(
     }
 
     private fun releasePlayer() {
-        val mediaId = player.currentMediaItem?.mediaId
-        val position = player.currentPosition
-        val duration = player.duration
+        // Take the exact position, then clear the snapshot so a transition fired while releasing
+        // cannot report the same item a second time.
+        refreshPlayingSnapshot()
+        val stopped = playing
+        playing = null
 
         _uiState.value.currentTrickplay?.loader?.release()
         _uiState.update { it.copy(currentTrickplay = null) }
@@ -370,19 +386,50 @@ constructor(
         player.removeListener(this)
         player.release()
 
-        if (mediaId != null && duration != C.TIME_UNSET && duration > 0) {
-            @OptIn(DelicateCoroutinesApi::class)
-            GlobalScope.launch(Dispatchers.IO) {
-                try {
-                    Timber.d("Sending playback stop")
-                    repository.postPlaybackStop(
-                        UUID.fromString(mediaId),
-                        position.times(10000),
-                        position.div(duration.toFloat()).times(100).toInt(),
-                    )
-                } catch (e: Exception) {
-                    Timber.e(e)
-                }
+        stopped?.let { reportStopped(it) }
+    }
+
+    /**
+     * Copy the player's position and duration into [playing], if the player is still on that item
+     * and both values are known. Unknown values are skipped so the last good ones are kept: mpv
+     * resets its position and duration as soon as it starts loading the next file, before it
+     * reports the item change.
+     *
+     * Called from the periodic progress and segment updates, from the UI poll loops, and right
+     * before every app-initiated item change, so a stop report uses a recent position.
+     */
+    fun refreshPlayingSnapshot() {
+        val current = playing ?: return
+        if (player.currentMediaItem?.mediaId != current.itemId.toString()) return
+        val position = player.currentPosition
+        val duration = player.duration
+        if (position < 0 || duration == C.TIME_UNSET || duration <= 0) return
+        playing = current.copy(positionMs = position, durationMs = duration)
+    }
+
+    /**
+     * Tell the server (and the local database) that [snapshot]'s item stopped playing. The only
+     * caller of [JellyfinRepository.postPlaybackStop]; skipped when the duration is unknown.
+     *
+     * Runs in [GlobalScope] because it must outlive [viewModelScope]: [releasePlayer] runs from
+     * [onCleared], and the player can be closed right after an item change.
+     *
+     * @return the reporting job, so a caller can wait for it, or `null` if nothing was sent.
+     */
+    @OptIn(DelicateCoroutinesApi::class)
+    private fun reportStopped(snapshot: PlayingSnapshot): Job? {
+        val (itemId, position, duration) = snapshot
+        if (duration == C.TIME_UNSET || duration <= 0) return null
+        return GlobalScope.launch(Dispatchers.IO) {
+            try {
+                Timber.d("Sending playback stop for $itemId at $position / $duration ms")
+                repository.postPlaybackStop(
+                    itemId,
+                    position.times(10000),
+                    position.div(duration.toFloat()).times(100).toInt(),
+                )
+            } catch (e: Exception) {
+                Timber.e(e)
             }
         }
     }
@@ -390,6 +437,7 @@ constructor(
     fun updatePlaybackProgress() {
         Timber.d("Updating playback progress")
         viewModelScope.launch(Dispatchers.Main) {
+            refreshPlayingSnapshot()
             savedStateHandle["position"] = player.currentPosition
             val mediaItem = player.currentMediaItem ?: return@launch
             if (mediaItem.mediaId.isNotEmpty()) {
@@ -416,6 +464,7 @@ constructor(
      */
     suspend fun updateCurrentSegment() = withContext(Dispatchers.Main) {
         Timber.d("Updating current segment")
+        refreshPlayingSnapshot()
         if (currentMediaItemSegments.isEmpty()) {
             return@withContext
         }
@@ -516,6 +565,21 @@ constructor(
     override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
         Timber.d("Playing MediaItem: ${mediaItem?.mediaId}")
         savedStateHandle["mediaItemIndex"] = player.currentMediaItemIndex
+
+        // Every item change goes through here, whatever caused it, so this is where the item being
+        // left is reported as stopped. The first load (nothing playing yet) reports nothing, and a
+        // reload of the same item (quality switch) keeps its snapshot and reports nothing.
+        val previous = playing
+        val newId = mediaItem?.mediaId?.let { runCatching { UUID.fromString(it) }.getOrNull() }
+        val stopJob =
+            if (previous != null && previous.itemId != newId) reportStopped(previous) else null
+        playing =
+            when {
+                previous != null && previous.itemId == newId -> previous
+                newId != null -> PlayingSnapshot(newId, 0L, C.TIME_UNSET)
+                else -> null
+            }
+
         viewModelScope.launch {
             try {
                 items
@@ -541,6 +605,10 @@ constructor(
                             )
                         }
 
+                        // Keep the previous item's stop ahead of this item's start, as the old
+                        // auto-advance code did. A stop that reaches the server after the start
+                        // can clear the session's now-playing item.
+                        stopJob?.join()
                         repository.postPlaybackStart(item.itemId)
 
                         if (shouldPollSegments()) {
@@ -580,27 +648,17 @@ constructor(
     }
 
     override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
-        // Report playback stopped for current item and transition to the next one
+        // End of the current item: transition to the next one. The stop for the finished item is
+        // reported by onMediaItemTransition when the advance happens.
         if (
             !playWhenReady &&
                 reason == Player.PLAY_WHEN_READY_CHANGE_REASON_END_OF_MEDIA_ITEM &&
                 player.playbackState == ExoPlayer.STATE_READY
         ) {
-            viewModelScope.launch {
-                val mediaId = player.currentMediaItem?.mediaId
-                val position = player.currentPosition
-                val duration = player.duration
-                if (mediaId != null && duration != C.TIME_UNSET && duration > 0) {
-                    try {
-                        repository.postPlaybackStop(
-                            UUID.fromString(mediaId),
-                            position.times(10000),
-                            position.div(duration.toFloat()).times(100).toInt(),
-                        )
-                    } catch (e: Exception) {
-                        Timber.e(e)
-                    }
-                }
+            // Dispatched (not immediate) so the advance runs after this listener callback returns,
+            // as it did when a network call came first.
+            viewModelScope.launch(Dispatchers.Main) {
+                refreshPlayingSnapshot()
 
                 // "Are you still watching?" — only intercept if there's another item to advance
                 // to. If this was the last item, fall through to the normal seek+play (which
@@ -609,6 +667,12 @@ constructor(
                     player.hasNextMediaItem() &&
                         stillWatchingTracker.onAutoAdvance(nowMs = System.currentTimeMillis())
                 ) {
+                    // The player stays paused on the finished item, so no transition happens
+                    // yet. Report the stop now so the server knows the item finished, and clear
+                    // the snapshot so the transition after the prompt (confirm, or the user
+                    // pressing play or next after dismissing it) does not report it again.
+                    playing?.let { reportStopped(it) }
+                    playing = null
                     showStillWatchingPrompt()
                     return@launch
                 }
@@ -625,6 +689,8 @@ constructor(
      * discontinuity, and the flag would leak onto the next genuine user seek.
      */
     private fun autoAdvanceToNextItem() {
+        // Exact position for the stop report onMediaItemTransition sends for the item being left.
+        refreshPlayingSnapshot()
         if (player.hasNextMediaItem()) {
             pendingAutoAdvanceSeek = true
         }
@@ -640,7 +706,7 @@ constructor(
             viewModelScope.launch {
                 delay(stillWatchingPromptTimeoutSeconds * 1000L)
                 // Timeout: user is gone. Hide the dialog and leave the player paused. The current
-                // item's progress was already reported above (postPlaybackStop with the actual
+                // item's stop was already reported in onPlayWhenReadyChanged (with the actual
                 // position), so the season won't be marked watched.
                 _uiState.update { it.copy(showStillWatching = false) }
                 Timber.d("Still-watching prompt timed out — staying paused")
@@ -871,6 +937,9 @@ constructor(
     fun skipSegment(segment: FindroidSegment) {
         markUserInteraction()
         if (shouldSkipToNextEpisode(segment)) {
+            // Exact position for the stop report onMediaItemTransition sends for this item. Past
+            // 90 % of the runtime, that report marks the item as played (#31).
+            refreshPlayingSnapshot()
             player.seekToNextMediaItem()
         } else {
             player.seekTo(segment.endTicks)

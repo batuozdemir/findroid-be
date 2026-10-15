@@ -120,6 +120,9 @@ fun PlayerScreen(
             delay(300)
             currentPosition = viewModel.player.currentPosition
             isPlaying = viewModel.player.isPlaying
+            // TV has no periodic progress update, so this is what keeps the stop report on
+            // next/previous (remote, media session) at the current position.
+            viewModel.refreshPlayingSnapshot()
         }
     }
 

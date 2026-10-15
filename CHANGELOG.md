@@ -10,6 +10,16 @@ _Maintenance_.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## Unreleased
+
+### Fixed
+- The server now learns that an episode stopped whenever playback moves to another one, not only
+  on the automatic advance at the end. This covers the next and previous buttons, the chapter-skip
+  gesture, the outro "Next episode" button, and media-session or remote controls, on phone and TV
+  and with both ExoPlayer and mpv. Jellyfin no longer shows the old episode as still playing, and
+  plugins such as Trakt and Playback Reporting see the stop. Skipping the outro past 90 % of the
+  runtime now marks the episode as watched (#65, #31).
+
 ## [v1.1.0-ce.5] — 2026-10-15
 
 Community contributions plus an upstream sync that moves to Navigation 3 and Room 3.
