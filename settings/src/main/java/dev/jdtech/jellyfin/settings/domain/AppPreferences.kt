@@ -98,6 +98,11 @@ class AppPreferences @Inject constructor(val sharedPreferences: SharedPreference
     val stillWatchingPromptTimeoutSeconds =
         Preference("pref_player_still_watching_prompt_timeout_seconds", 30)
 
+    // Player - "Play next episode automatically". "server" follows the Jellyfin user's
+    // enableNextEpisodeAutoPlay; "on" / "off" override it (Constants.PlayerAutoPlayNext).
+    val playerAutoPlayNext =
+        Preference<String?>("pref_player_autoplay_next", Constants.PlayerAutoPlayNext.SERVER)
+
     // Player - Media Segments per-type action (SKIP / ASK / IGNORE)
     //
     // Stored as nullable strings. The default is null on purpose: an absent

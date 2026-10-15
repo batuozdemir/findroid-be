@@ -7,6 +7,14 @@ object Constants {
         const val PIP = "pip"
     }
 
+    // Player - "Play next episode automatically". The values stored in
+    // pref_player_autoplay_next and R.array.player_autoplay_next_values.
+    object PlayerAutoPlayNext {
+        const val SERVER = "server"
+        const val ON = "on"
+        const val OFF = "off"
+    }
+
     // Player - mpv audio output. These are mpv driver names, passed to `ao` verbatim, and
     // are also the values stored in R.array.mpv_aos.
     object MpvAudioOutput {
