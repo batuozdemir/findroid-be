@@ -28,6 +28,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   and with both ExoPlayer and mpv. Jellyfin no longer shows the old episode as still playing, and
   plugins such as Trakt and Playback Reporting see the stop. Skipping the outro past 90 % of the
   runtime now marks the episode as watched (#65, #31).
+- On TV, the player now closes when playback ends (after the last episode, or at the end of an
+  episode with autoplay off) instead of sitting paused on the last frame.
+- On TV, media-segment skip buttons and automatic skipping (intros, outros, recaps…) now work; the
+  TV player never checked the playback position against the segments.
 
 ## [v1.1.0-ce.5] — 2026-10-15
 

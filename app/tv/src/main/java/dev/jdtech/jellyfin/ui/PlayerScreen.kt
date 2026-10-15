@@ -48,6 +48,7 @@ import dev.jdtech.jellyfin.core.R
 import dev.jdtech.jellyfin.di.SubtitleStyleEntryPoint
 import dev.jdtech.jellyfin.player.core.domain.models.PlayerChapter
 import dev.jdtech.jellyfin.player.local.presentation.PlayerAction
+import dev.jdtech.jellyfin.player.local.presentation.PlayerEvents
 import dev.jdtech.jellyfin.player.local.presentation.PlayerViewModel
 import dev.jdtech.jellyfin.presentation.theme.spacings
 import dev.jdtech.jellyfin.ui.components.player.ChapterListDialog
@@ -58,6 +59,7 @@ import dev.jdtech.jellyfin.ui.components.player.VideoPlayerOverlay
 import dev.jdtech.jellyfin.ui.components.player.VideoPlayerSeeker
 import dev.jdtech.jellyfin.ui.components.player.VideoPlayerState
 import dev.jdtech.jellyfin.ui.components.player.rememberVideoPlayerState
+import dev.jdtech.jellyfin.utils.ObserveAsEvents
 import dev.jdtech.jellyfin.utils.applySubtitleStyle
 import dev.jdtech.jellyfin.utils.handleDPadKeyEvents
 import java.util.UUID
@@ -70,10 +72,22 @@ fun PlayerScreen(
     itemId: UUID,
     itemKind: String,
     startFromBeginning: Boolean,
+    navigateBack: () -> Unit,
 ) {
     val viewModel = hiltViewModel<PlayerViewModel>()
 
     val uiState by viewModel.uiState.collectAsState()
+
+    ObserveAsEvents(viewModel.eventsChannelFlow) { event ->
+        when (event) {
+            // Sent when the queue ends, or when an episode ends with autoplay off.
+            is PlayerEvents.NavigateBack -> navigateBack()
+            // Already logged in PlayerViewModel; phone does not surface it either.
+            is PlayerEvents.PlayerError -> Unit
+            // The screen is kept on for as long as the player is shown (see below).
+            is PlayerEvents.IsPlayingChanged -> Unit
+        }
+    }
 
     val context = LocalContext.current
     val currentView = LocalView.current
@@ -123,6 +137,15 @@ fun PlayerScreen(
             // TV has no periodic progress update, so this is what keeps the stop report on
             // next/previous (remote, media session) at the current position.
             viewModel.refreshPlayingSnapshot()
+        }
+    }
+
+    // Drives the skip button and auto-skip for media segments, as PlayerActivity does on phone.
+    LaunchedEffect(Unit) {
+        if (!viewModel.shouldPollSegments()) return@LaunchedEffect
+        while (true) {
+            viewModel.updateCurrentSegment()
+            delay(1000L)
         }
     }
 
