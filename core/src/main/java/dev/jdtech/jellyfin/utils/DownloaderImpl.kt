@@ -590,7 +590,7 @@ class DownloaderImpl(
      * for real content. Subtitle files are tiny; a row whose server match cannot be found is
      * simply dropped (its partial discarded).
      */
-    private fun restartExternalMediaStreamRows(
+    private suspend fun restartExternalMediaStreamRows(
         item: FindroidItem,
         rows: List<FindroidMediaStreamDto>,
         serverSource: FindroidSource,
