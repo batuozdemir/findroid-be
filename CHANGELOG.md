@@ -10,6 +10,13 @@ _Maintenance_.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Fixed
+- With the mpv player, seeking now counts as activity for the "Are you still watching?" prompt, so
+  it no longer appears while you are skipping around. mpv was reporting seeks in a way the player
+  screen didn't listen for (#70).
+
 ## [v1.1.0-ce.5] — 2026-10-15
 
 Community contributions plus an upstream sync that moves to Navigation 3 and Room 3.
