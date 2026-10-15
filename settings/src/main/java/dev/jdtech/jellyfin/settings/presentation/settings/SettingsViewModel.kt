@@ -69,7 +69,7 @@ class SettingsViewModel @Inject constructor(
                                 viewModelScope.launch {
                                     eventsChannel.send(
                                         SettingsEvent.NavigateToSettings(
-                                            intArrayOf(it.nameStringResource)
+                                            listOf(it.nameStringResource)
                                         )
                                     )
                                 }
@@ -128,7 +128,7 @@ class SettingsViewModel @Inject constructor(
                                 viewModelScope.launch {
                                     eventsChannel.send(
                                         SettingsEvent.NavigateToSettings(
-                                            intArrayOf(it.nameStringResource)
+                                            listOf(it.nameStringResource)
                                         )
                                     )
                                 }
@@ -218,7 +218,7 @@ class SettingsViewModel @Inject constructor(
                                 viewModelScope.launch {
                                     eventsChannel.send(
                                         SettingsEvent.NavigateToSettings(
-                                            intArrayOf(it.nameStringResource)
+                                            listOf(it.nameStringResource)
                                         )
                                     )
                                 }
@@ -356,7 +356,7 @@ class SettingsViewModel @Inject constructor(
                                                         viewModelScope.launch {
                                                             eventsChannel.send(
                                                                 SettingsEvent.NavigateToSettings(
-                                                                    intArrayOf(R.string.settings_category_player, it.nameStringResource)
+                                                                    listOf(R.string.settings_category_player, it.nameStringResource)
                                                                 )
                                                             )
                                                         }
@@ -813,7 +813,7 @@ class SettingsViewModel @Inject constructor(
                                 viewModelScope.launch {
                                     eventsChannel.send(
                                         SettingsEvent.NavigateToSettings(
-                                            intArrayOf(it.nameStringResource)
+                                            listOf(it.nameStringResource)
                                         )
                                     )
                                 }
@@ -884,7 +884,7 @@ class SettingsViewModel @Inject constructor(
                                 viewModelScope.launch {
                                     eventsChannel.send(
                                         SettingsEvent.NavigateToSettings(
-                                            intArrayOf(it.nameStringResource)
+                                            listOf(it.nameStringResource)
                                         )
                                     )
                                 }
@@ -931,7 +931,7 @@ class SettingsViewModel @Inject constructor(
                                 viewModelScope.launch {
                                     eventsChannel.send(
                                         SettingsEvent.NavigateToSettings(
-                                            intArrayOf(it.nameStringResource)
+                                            listOf(it.nameStringResource)
                                         )
                                     )
                                 }
@@ -975,7 +975,7 @@ class SettingsViewModel @Inject constructor(
                                 viewModelScope.launch {
                                     eventsChannel.send(
                                         SettingsEvent.NavigateToSettings(
-                                            intArrayOf(it.nameStringResource)
+                                            listOf(it.nameStringResource)
                                         )
                                     )
                                 }
@@ -1038,7 +1038,7 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    fun loadPreferences(indexes: IntArray = intArrayOf(), deviceType: DeviceType) {
+    fun loadPreferences(indexes: List<Int> = emptyList(), deviceType: DeviceType) {
         viewModelScope.launch {
             var preferences = topLevelPreferences
 

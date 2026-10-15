@@ -38,7 +38,7 @@ constructor(
             )
 
         return withContext(Dispatchers.IO) {
-            val servers = database.getAllServersSync()
+            val servers = database.getServers()
             var hadFailures = false
 
             for (server in servers) {

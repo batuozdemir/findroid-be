@@ -76,7 +76,7 @@ constructor(
     }
 
     private suspend fun loadServerName(serverId: String) {
-        val server = database.get(serverId)
+        val server = database.getServer(serverId)
         if (server != null) {
             _state.update { it.copy(server = server) }
         }

@@ -421,7 +421,7 @@ class DownloaderImpl(
         return result
     }
 
-    private fun downloadExternalMediaStreams(
+    private suspend fun downloadExternalMediaStreams(
         item: FindroidItem,
         source: FindroidSource,
         storageIndex: Int = 0,
@@ -556,7 +556,7 @@ class DownloaderImpl(
         saveTrickplayData(itemId, sourceId, trickplayInfo, byteArrays)
     }
 
-    private fun saveTrickplayData(
+    private suspend fun saveTrickplayData(
         itemId: UUID,
         sourceId: String,
         trickplayInfo: FindroidTrickplayInfo,
