@@ -152,5 +152,10 @@ the new tag, and the published release.
   - `ktfmt` = `0.26.0` in `gradle/libs.versions.toml` (upstream: `0.27.0`). 0.27.0 bundles ktfmt
     0.64, whose formatting differs from 0.62 across the whole tree; taking the bump turns Lint
     red on ~100 files. Upstream's own `main` is red for this reason — their bump PR touched only
-    `libs.versions.toml`, and `lint.yaml`'s `**.kt`/`**.kts` path filter meant Lint never ran on
-    it. Unpin only together with a tree-wide `ktfmtFormat`, ideally after upstream reformats.
+    `libs.versions.toml`, and the lint workflow's `**.kt`/`**.kts` path filter meant Lint never
+    ran on it (upstream has since renamed `lint.yaml` → `format.yaml`). Unpin only together with
+    a tree-wide `ktfmtFormat`, ideally after upstream reformats.
+  - **JDK 21** — `Versions.JAVA` = `JavaLanguageVersion.of(21)` in `buildSrc/.../Versions.kt` and
+    `java-version: 21` in every `.github/workflows/*` (upstream: 17, since `1d5081d6`). Local dev
+    machines only have JDK 21 and toolchain auto-provisioning isn't configured, so taking 17
+    breaks the build with "Cannot find a Java installation … languageVersion=17".

@@ -40,7 +40,7 @@ suspend fun MediaSourceInfo.toFindroidSource(
             protocol == MediaProtocol.FILE -> {
                 try {
                     if (includePath) jellyfinRepository.getStreamUrl(itemId, id.orEmpty()) else ""
-                } catch (e: Exception) {
+                } catch (_: Exception) {
                     ""
                 }
             }
@@ -59,7 +59,9 @@ suspend fun MediaSourceInfo.toFindroidSource(
     )
 }
 
-fun FindroidSourceDto.toFindroidSource(serverDatabaseDao: ServerDatabaseDao): FindroidSource {
+suspend fun FindroidSourceDto.toFindroidSource(
+    serverDatabaseDao: ServerDatabaseDao
+): FindroidSource {
     return FindroidSource(
         id = id,
         name = name,
