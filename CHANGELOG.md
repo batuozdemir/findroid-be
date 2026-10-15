@@ -10,6 +10,38 @@ _Maintenance_.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [v1.1.0-ce.5] — 2026-10-15
+
+Community contributions plus an upstream sync that moves to Navigation 3 and Room 3.
+
+### Added
+- Video quality selector in the phone player (HD button). Picking a bitrate asks the server to
+  transcode to it, "Original quality" goes back to direct play, and the choice is remembered. Works
+  on both ExoPlayer and mpv; mpv can now transcode when a cap is set. Thanks @jorritsmit (#61).
+
+### Fixed
+- The season screen's download button now shows up. Episodes were fetched without the field that
+  says they can be downloaded. Thanks @kaixuantan (#62).
+- Dolby Digital Plus Atmos (E-AC-3 JOC) files no longer crash ExoPlayer on phones whose hardware
+  decoder rejects Atmos frames (seen on Pixel 8). Phones now decode audio with the bundled ffmpeg
+  first; Android TV keeps the hardware decoder so passthrough to soundbars and receivers still
+  works. Thanks @jorritsmit (#59).
+- Transcoded downloads (for example Dolby Vision) now also save the video's built-in subtitle
+  tracks as separate files, and subtitle downloads that fail are retried. Thanks @jorritsmit (#60).
+- Season cards on the home screen show season details, from upstream.
+
+### Changed
+- Navigation moved from Navigation 2 to Navigation 3, from upstream. CE's downloads-only show and
+  season screens and the subtitle style screen were carried over.
+- Database moved to Room 3, from upstream. The schema stays at version 11, so existing installs and
+  downloads upgrade in place.
+
+### Maintenance
+- Synced with upstream findroid: Jellyfin SDK `1.9.2`, Kotlin `2.4.21`, Gradle `9.8.1`,
+  androidx.paging `3.5.3`, work-runtime `2.12.0`, androidx.core `1.19.1`, aboutlibraries `15.3.0`,
+  slf4j `2.0.20`, fastlane `2.241.0`.
+- CE stays on JDK 21 rather than upstream's move to JDK 17, and ktfmt stays pinned to `0.26.0`.
+
 ## [v1.1.0-ce.4] — 2026-09-13
 
 Upstream sync only — no CE behaviour changes.
