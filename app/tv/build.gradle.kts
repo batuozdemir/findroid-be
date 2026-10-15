@@ -15,6 +15,7 @@ val keystoreProps: Properties? =
     if (envKeystoreFile == null && keystorePropertiesFile.exists()) {
         Properties().apply { load(keystorePropertiesFile.inputStream()) }
     } else null
+
 java { toolchain { languageVersion = Versions.JAVA } }
 
 android {

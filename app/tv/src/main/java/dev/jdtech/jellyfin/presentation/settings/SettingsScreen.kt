@@ -63,7 +63,7 @@ fun SettingsScreen(
             // is needed for SettingsViewModel.loadPreferences to walk down to it.
             is SettingsEvent.NavigateToSubtitleStyle ->
                 navigateToSubSettings(
-                    intArrayOf(
+                    listOf(
                         SettingsR.string.settings_category_player,
                         SettingsR.string.subtitle_style,
                     )

@@ -38,12 +38,12 @@ class Converters {
         return value?.let { Json.decodeFromString(value) }
     }
 
-    @TypeConverter
+    @ColumnTypeConverter
     fun fromStringListToString(value: List<String>?): String? {
         return value?.let { Json.encodeToString(value) }
     }
 
-    @TypeConverter
+    @ColumnTypeConverter
     fun fromStringToStringList(value: String?): List<String>? {
         return value?.let { Json.decodeFromString(value) }
     }

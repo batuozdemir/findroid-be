@@ -490,7 +490,7 @@ class DownloaderImpl(
      * type/language/codec/title — unique enough for real content. Subtitle files are tiny;
      * a row whose server match cannot be found is simply dropped (its partial discarded).
      */
-    private fun resumeExternalMediaStreams(
+    private suspend fun resumeExternalMediaStreams(
         item: FindroidItem,
         dbSource: FindroidSource,
         serverSource: FindroidSource,
@@ -679,7 +679,7 @@ class DownloaderImpl(
             .map { File(it, "downloads").absolutePath }
 
         val knownPaths = mutableSetOf<String>()
-        fun remember(source: FindroidSourceDto) {
+        suspend fun remember(source: FindroidSourceDto) {
             knownPaths.add(source.path)
             for (stream in database.getMediaStreamsBySourceId(source.id)) {
                 knownPaths.add(stream.path)
@@ -764,7 +764,7 @@ class DownloaderImpl(
         return true
     }
 
-    private fun finalizeMediaStream(mediaStream: FindroidMediaStreamDto): Boolean {
+    private suspend fun finalizeMediaStream(mediaStream: FindroidMediaStreamDto): Boolean {
         if (!mediaStream.path.endsWith(".download")) return true
         val finalPath = mediaStream.path.removeSuffix(".download")
         val downloadFile = File(mediaStream.path)

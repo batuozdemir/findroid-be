@@ -212,7 +212,10 @@ constructor(
                 .filter { hasCompletedSource(it.id) }
             val sortedMovies = when (sortOrder) {
                 DownloadSortOrder.NAME -> filteredMovies.sortedBy { it.name.lowercase() }
-                DownloadSortOrder.DATE -> filteredMovies.sortedByDescending { maxSourceMtime(it.id) }
+                DownloadSortOrder.DATE -> {
+                    val mtimes = filteredMovies.associate { it.id to maxSourceMtime(it.id) }
+                    filteredMovies.sortedByDescending { mtimes.getValue(it.id) }
+                }
                 DownloadSortOrder.SIZE -> filteredMovies.sortedByDescending { itemSizes[it.id] ?: 0L }
             }
             val shows = items.filterIsInstance<FindroidShow>()
@@ -225,9 +228,11 @@ constructor(
                 }
             val sortedShows = when (sortOrder) {
                 DownloadSortOrder.NAME -> filteredShows.sortedBy { it.name.lowercase() }
-                DownloadSortOrder.DATE -> filteredShows.sortedByDescending { show ->
-                    episodesByShow.getValue(show)
-                        .maxOfOrNull { maxSourceMtime(it.id) } ?: 0L
+                DownloadSortOrder.DATE -> {
+                    val mtimes = filteredShows.associateWith { show ->
+                        episodesByShow.getValue(show).maxOfOrNull { maxSourceMtime(it.id) } ?: 0L
+                    }
+                    filteredShows.sortedByDescending { mtimes.getValue(it) }
                 }
                 DownloadSortOrder.SIZE -> filteredShows.sortedByDescending { show ->
                     episodesByShow.getValue(show)
@@ -250,10 +255,10 @@ constructor(
             sections
         }
 
-    private fun maxSourceMtime(itemId: java.util.UUID): Long =
+    private suspend fun maxSourceMtime(itemId: java.util.UUID): Long =
         database.getSources(itemId).maxOfOrNull { File(it.path).lastModified() } ?: 0L
 
-    private fun hasCompletedSource(itemId: java.util.UUID): Boolean =
+    private suspend fun hasCompletedSource(itemId: java.util.UUID): Boolean =
         database.getSources(itemId).any { !it.path.endsWith(".download") }
 
     private suspend fun computeItemSizes(

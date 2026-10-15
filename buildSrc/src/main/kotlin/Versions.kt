@@ -9,5 +9,6 @@ object Versions {
     const val MIN_SDK = 28
     const val BUILD_TOOLS = "37.0.0"
 
-    val JAVA = JavaLanguageVersion.of(17)
+    // CE-owned: upstream moved to 17; the fork stays on 21 (local dev + CI use JDK 21).
+    val JAVA = JavaLanguageVersion.of(21)
 }
