@@ -1,6 +1,7 @@
 package dev.jdtech.jellyfin.player.local.presentation
 
 import android.app.Application
+import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.widget.Toast
@@ -223,10 +224,21 @@ constructor(
                 // frame" on Pixel 8), killing playback. ffmpeg decodes the DD+ core and
                 // ignores the JOC extension, like mpv. Only audio is affected — the
                 // ffmpeg extension has no video decoders, so video stays on hardware.
+                // Not on TV: ffmpeg always decodes to PCM, which would break E-AC-3/Atmos
+                // passthrough to a soundbar or receiver over HDMI. TVs keep ON so
+                // MediaCodec (and its passthrough path) stays first.
+                val isTv =
+                    application.packageManager.hasSystemFeature(
+                        PackageManager.FEATURE_LEANBACK
+                    )
                 val renderersFactory =
                     DefaultRenderersFactory(application)
                         .setExtensionRendererMode(
-                            DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER
+                            if (isTv) {
+                                DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON
+                            } else {
+                                DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER
+                            }
                         )
                 ExoPlayer.Builder(application, renderersFactory)
                     .setAudioAttributes(audioAttributes, true)
