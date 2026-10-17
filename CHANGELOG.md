@@ -12,6 +12,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Added
+- "Play next episode automatically" setting under Settings → Player, on phone and TV. By default
+  it follows the Jellyfin account's "Play next episode automatically" playback setting, which
+  Findroid used to ignore; "Always" and "Never" override it on this device. With autoplay off,
+  playback stops at the end of an episode and the episode is marked as watched; on the phone the
+  player closes. An outro set to skip automatically no longer starts the next episode either. The
+  next button, the outro "Next episode" button and remote controls still go to the next episode.
+  Offline, "Use server setting" keeps autoplaying (#66, upstream #1050).
+
 ### Fixed
 - Opening a movie, show or episode no longer crashes on Jellyfin 12 servers when an actor has more
   than one role. Jellyfin 12 sends one entry per role; these are now merged into one cast card with

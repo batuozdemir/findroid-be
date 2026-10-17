@@ -716,6 +716,23 @@ class SettingsViewModel @Inject constructor(
                                             ),
                                     ),
                                     PreferenceGroup(
+                                        nameStringResource = R.string.pref_player_next_episode,
+                                        preferences =
+                                            listOf(
+                                                PreferenceSelect(
+                                                    nameStringResource =
+                                                        R.string.pref_player_autoplay_next,
+                                                    descriptionStringRes =
+                                                        R.string.pref_player_autoplay_next_summary,
+                                                    backendPreference =
+                                                        appPreferences.playerAutoPlayNext,
+                                                    options = R.array.player_autoplay_next,
+                                                    optionValues =
+                                                        R.array.player_autoplay_next_values,
+                                                ),
+                                            ),
+                                    ),
+                                    PreferenceGroup(
                                         nameStringResource = R.string.pref_player_still_watching,
                                         preferences =
                                             listOf(

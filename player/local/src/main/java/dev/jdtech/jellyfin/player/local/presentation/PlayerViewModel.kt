@@ -30,17 +30,22 @@ import dev.jdtech.jellyfin.player.local.R
 import dev.jdtech.jellyfin.player.local.domain.PlaylistManager
 import dev.jdtech.jellyfin.player.local.domain.StillWatchingTracker
 import dev.jdtech.jellyfin.player.local.domain.TrickplayLoader
+import dev.jdtech.jellyfin.player.local.domain.autoPlayNextFollowsServer
+import dev.jdtech.jellyfin.player.local.domain.resolveAutoPlayNext
 import dev.jdtech.jellyfin.player.local.mpv.MPVPlayer
 import dev.jdtech.jellyfin.repository.JellyfinRepository
 import dev.jdtech.jellyfin.settings.domain.AppPreferences
 import dev.jdtech.jellyfin.settings.domain.Constants
 import java.util.UUID
 import javax.inject.Inject
+import kotlin.coroutines.cancellation.CancellationException
 import kotlin.math.ceil
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -165,6 +170,34 @@ constructor(
     private data class PlayingSnapshot(val itemId: UUID, val positionMs: Long, val durationMs: Long)
 
     private var playing: PlayingSnapshot? = null
+
+    /**
+     * Whether to start the next item by itself at the end of an item: the "Play next episode
+     * automatically" preference, which follows the Jellyfin user's `enableNextEpisodeAutoPlay`
+     * unless it is set to always or never. Resolved once per player session and started here, at
+     * construction, so the end of an item does not wait on the network. The server is only asked
+     * when the preference follows it; if that fails (offline, network error) it falls back to
+     * autoplay. Only affects what happens automatically: next/previous, the outro "Next episode"
+     * button and remote controls always work, and the queue is the same either way.
+     */
+    private val autoPlayNext: Deferred<Boolean> =
+        viewModelScope.async {
+            val pref = appPreferences.getValue(appPreferences.playerAutoPlayNext)
+            val server =
+                if (autoPlayNextFollowsServer(pref)) {
+                    try {
+                        repository.getUserConfiguration()?.enableNextEpisodeAutoPlay
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        Timber.e(e, "Could not read the server's next episode autoplay setting")
+                        null
+                    }
+                } else {
+                    null
+                }
+            resolveAutoPlayNext(pref, server).also { Timber.d("Autoplay next item: $it") }
+        }
 
     init {
         maxBitrate = appPreferences.getValue(appPreferences.playerMaxBitrate)
@@ -439,6 +472,11 @@ constructor(
         viewModelScope.launch(Dispatchers.Main) {
             refreshPlayingSnapshot()
             savedStateHandle["position"] = player.currentPosition
+            // The current item's stop was already reported (end of item without autoplay, or the
+            // still-watching prompt). A progress report now would reopen its session on the
+            // server and overwrite the position the stop stored, e.g. from onPause while the
+            // player closes.
+            if (playing == null) return@launch
             val mediaItem = player.currentMediaItem ?: return@launch
             if (mediaItem.mediaId.isNotEmpty()) {
                 val itemId = UUID.fromString(mediaItem.mediaId)
@@ -497,7 +535,7 @@ constructor(
                 val pipOnly =
                     segmentsAutoSkipMode == Constants.PlayerMediaSegmentsAutoSkip.PIP
                 if (!pipOnly || isInPictureInPictureMode) {
-                    skipSegment(currentSegment)
+                    skipSegmentAutomatically(currentSegment)
                 } else {
                     _uiState.update {
                         it.copy(
@@ -648,8 +686,8 @@ constructor(
     }
 
     override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
-        // End of the current item: transition to the next one. The stop for the finished item is
-        // reported by onMediaItemTransition when the advance happens.
+        // End of the current item: transition to the next one, or close the player if autoplay is
+        // off. On an advance, the stop for the finished item is reported by onMediaItemTransition.
         if (
             !playWhenReady &&
                 reason == Player.PLAY_WHEN_READY_CHANGE_REASON_END_OF_MEDIA_ITEM &&
@@ -659,6 +697,22 @@ constructor(
             // as it did when a network call came first.
             viewModelScope.launch(Dispatchers.Main) {
                 refreshPlayingSnapshot()
+
+                // Autoplay off: stop here and close the player instead of advancing. The last item
+                // keeps the normal path below, which ends the playlist (STATE_ENDED →
+                // NavigateBack) and reports the stop on release, so the setting changes nothing
+                // there.
+                if (player.hasNextMediaItem()) {
+                    val endedItemId = player.currentMediaItem?.mediaId
+                    // Normally resolved long ago; this only waits if the server is slow to answer.
+                    val autoPlay = autoPlayNext.await()
+                    // The user moved to another item while waiting: nothing left to do here.
+                    if (player.currentMediaItem?.mediaId != endedItemId) return@launch
+                    if (!autoPlay) {
+                        endItemWithoutAdvancing()
+                        return@launch
+                    }
+                }
 
                 // "Are you still watching?" — only intercept if there's another item to advance
                 // to. If this was the last item, fall through to the normal seek+play (which
@@ -696,6 +750,27 @@ constructor(
         }
         player.seekToNextMediaItem()
         player.play()
+    }
+
+    /**
+     * End the current item without moving on, because autoplay is off: report the stop for it and
+     * close the player, the same way it closes after the last item. Used at the end of an item and
+     * for an automatic skip of an outro that runs to the end. The still-watching prompt is not
+     * shown, since nothing plays on.
+     *
+     * Clearing [playing] keeps [releasePlayer] (and [updatePlaybackProgress]) from reporting the
+     * item again when the player closes. It also makes this a no-op if called again for the same
+     * item, e.g. by the next segment poll while the player is closing.
+     */
+    private fun endItemWithoutAdvancing() {
+        refreshPlayingSnapshot()
+        val finished = playing ?: return
+        playing = null
+        Timber.d("Autoplay off — not advancing past ${finished.itemId}")
+        // Already paused at the end of an item; this stops an outro that is still playing.
+        player.pause()
+        reportStopped(finished)
+        eventsChannel.trySend(PlayerEvents.NavigateBack)
     }
 
     private fun showStillWatchingPrompt() {
@@ -945,6 +1020,21 @@ constructor(
             player.seekTo(segment.endTicks)
         }
         _uiState.update { it.copy(currentSegment = null) }
+    }
+
+    /**
+     * Skip [segment] because its action is [MediaSegmentAction.SKIP]. Skipping an outro that runs
+     * to the end of the item would start the next one, which is autoplay; with autoplay off, end
+     * the item and close the player instead. A tap on "Next episode" goes through [skipSegment]
+     * and always moves on.
+     */
+    private suspend fun skipSegmentAutomatically(segment: FindroidSegment) {
+        if (shouldSkipToNextEpisode(segment) && !autoPlayNext.await()) {
+            _uiState.update { it.copy(currentSegment = null) }
+            endItemWithoutAdvancing()
+            return
+        }
+        skipSegment(segment)
     }
 
     // Check if the outro segment's end time is within n milliseconds of the player's total duration
