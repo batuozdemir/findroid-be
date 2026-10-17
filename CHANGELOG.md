@@ -16,6 +16,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Opening a movie, show or episode no longer crashes on Jellyfin 12 servers when an actor has more
   than one role. Jellyfin 12 sends one entry per role; these are now merged into one cast card with
   the roles joined by " / ", and writers and directors are no longer listed twice (#64).
+- With the mpv player, seeking now counts as activity for the "Are you still watching?" prompt, so
+  it no longer appears while you are skipping around. mpv was reporting seeks in a way the player
+  screen didn't listen for (#70).
 
 ## [v1.1.0-ce.5] — 2026-10-15
 

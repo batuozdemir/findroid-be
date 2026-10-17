@@ -147,9 +147,9 @@ constructor(
     // surfaces in onPositionDiscontinuity as DISCONTINUITY_REASON_SEEK — indistinguishable from a
     // user seek without this hint. onPositionDiscontinuity checks and clears the flag so it does
     // not treat our own advance as a user interaction (which would reset the still-watching
-    // counter and refresh the inactivity timer). The seek→discontinuity callback is delivered
-    // asynchronously on the main looper for both ExoPlayer and MPVPlayer, so the flag must persist
-    // until the callback fires rather than being cleared right after the seek call.
+    // counter and refresh the inactivity timer). The flag persists until the callback fires rather
+    // than being cleared right after the seek call, so it holds whether a backend delivers the
+    // discontinuity synchronously from seekTo() (MPVPlayer) or later on the main looper.
     private var pendingAutoAdvanceSeek = false
 
     init {
