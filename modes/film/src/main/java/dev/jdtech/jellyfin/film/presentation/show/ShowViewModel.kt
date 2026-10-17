@@ -9,6 +9,7 @@ import dev.jdtech.jellyfin.models.FindroidItemPerson
 import dev.jdtech.jellyfin.models.FindroidShow
 import dev.jdtech.jellyfin.models.FindroidSourceType
 import dev.jdtech.jellyfin.models.isDownloaded
+import dev.jdtech.jellyfin.models.mergeDuplicateRoles
 import dev.jdtech.jellyfin.repository.JellyfinRepository
 import dev.jdtech.jellyfin.utils.Downloader
 import java.util.UUID
@@ -151,19 +152,19 @@ constructor(
 
     private suspend fun getActors(item: FindroidShow): List<FindroidItemPerson> {
         return withContext(Dispatchers.Default) {
-            item.people.filter { it.type == PersonKind.ACTOR }
+            item.people.mergeDuplicateRoles().filter { it.type == PersonKind.ACTOR }
         }
     }
 
     private suspend fun getDirector(item: FindroidShow): FindroidItemPerson? {
         return withContext(Dispatchers.Default) {
-            item.people.firstOrNull { it.type == PersonKind.DIRECTOR }
+            item.people.mergeDuplicateRoles().firstOrNull { it.type == PersonKind.DIRECTOR }
         }
     }
 
     private suspend fun getWriters(item: FindroidShow): List<FindroidItemPerson> {
         return withContext(Dispatchers.Default) {
-            item.people.filter { it.type == PersonKind.WRITER }
+            item.people.mergeDuplicateRoles().filter { it.type == PersonKind.WRITER }
         }
     }
 

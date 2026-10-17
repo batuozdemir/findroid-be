@@ -356,7 +356,13 @@ class MPVPlayer(
                                     playbackState = STATE_READY,
                                 )
                             } else {
+                                val oldPosition = currentPositionInfo()
                                 prepareMediaItem(currentMediaItemIndex + 1)
+                                notifyPositionDiscontinuity(
+                                    oldPosition,
+                                    positionInfo(currentMediaItemIndex + 1, initialSeekTo),
+                                    DISCONTINUITY_REASON_AUTO_TRANSITION,
+                                )
                                 play()
                             }
                         } else {
@@ -455,17 +461,16 @@ class MPVPlayer(
                     currentDurationMs =
                         (mpvLib.getPropertyDouble("duration")?.times(C.MILLIS_PER_SECOND))?.toLong()
                 }
+                // Position discontinuities are reported from seekTo() (and the end-of-file
+                // auto-advance), not here: mpv also raises this event for the internal start
+                // position seek below, which must not look like a seek to listeners.
                 MpvEvent.MPV_EVENT_SEEK -> {
                     setPlayerStateAndNotifyIfChanged(playbackState = STATE_BUFFERING)
-                    listeners.sendEvent(EVENT_POSITION_DISCONTINUITY) { listener ->
-                        @Suppress("DEPRECATION")
-                        listener.onPositionDiscontinuity(DISCONTINUITY_REASON_SEEK)
-                    }
                 }
                 MpvEvent.MPV_EVENT_PLAYBACK_RESTART -> {
                     if (!isPlayerReady) {
                         isPlayerReady = true
-                        seekTo(C.TIME_UNSET)
+                        applyInitialSeek()
                         if (playWhenReady) {
                             Timber.d("Starting playback...")
                             mpvLib.setPropertyBoolean("pause", false)
@@ -1013,20 +1018,73 @@ class MPVPlayer(
         @Player.Command seekCommand: Int,
         isRepeatingCurrentItem: Boolean,
     ) {
+        val oldPosition = currentPositionInfo()
         if (mediaItemIndex == currentMediaItemIndex) {
             val seekTo = if (positionMs != C.TIME_UNSET) positionMs else initialSeekTo
-            initialSeekTo =
-                if (isPlayerReady) {
-                    mpvLib.command(
-                        arrayOf("seek", "${seekTo.toDouble().div(C.MILLIS_PER_SECOND)}", "absolute")
-                    )
-                    0L
-                } else {
-                    seekTo
-                }
+            initialSeekTo = seekTo
+            applyInitialSeek()
+            notifyPositionDiscontinuity(
+                oldPosition,
+                positionInfo(mediaItemIndex, seekTo),
+                DISCONTINUITY_REASON_SEEK,
+            )
         } else {
             prepareMediaItem(mediaItemIndex)
+            // prepareMediaItem is a no-op for an index outside the playlist; nothing moved then.
+            if (internalMediaItems.getOrNull(mediaItemIndex) != null) {
+                notifyPositionDiscontinuity(
+                    oldPosition,
+                    positionInfo(mediaItemIndex, initialSeekTo),
+                    DISCONTINUITY_REASON_SEEK,
+                )
+            }
             play()
+        }
+    }
+
+    /**
+     * Issues the pending [initialSeekTo] to mpv once the current file is ready; until then it stays
+     * pending and is applied from MPV_EVENT_PLAYBACK_RESTART. Does not notify listeners — callers
+     * that represent an actual seek report the discontinuity themselves.
+     */
+    private fun applyInitialSeek() {
+        if (!isPlayerReady) return
+        mpvLib.command(
+            arrayOf("seek", "${initialSeekTo.toDouble().div(C.MILLIS_PER_SECOND)}", "absolute")
+        )
+        initialSeekTo = 0L
+    }
+
+    private fun currentPositionInfo(): Player.PositionInfo =
+        positionInfo(currentMediaItemIndex, currentPositionMs ?: 0L)
+
+    private fun positionInfo(mediaItemIndex: Int, positionMs: Long): Player.PositionInfo =
+        Player.PositionInfo(
+            /* windowUid= */ mediaItemIndex,
+            /* mediaItemIndex= */ mediaItemIndex,
+            /* mediaItem= */ internalMediaItems.getOrNull(mediaItemIndex),
+            /* periodUid= */ mediaItemIndex,
+            /* periodIndex= */ mediaItemIndex,
+            /* positionMs= */ positionMs,
+            /* contentPositionMs= */ positionMs,
+            /* adGroupIndex= */ C.INDEX_UNSET,
+            /* adIndexInAdGroup= */ C.INDEX_UNSET,
+        )
+
+    /**
+     * Notifies listeners of a position discontinuity through both [Player.Listener] overloads. In
+     * media3 these are independent default methods, so — like ExoPlayer — both must be invoked;
+     * listeners may override either one.
+     */
+    private fun notifyPositionDiscontinuity(
+        oldPosition: Player.PositionInfo,
+        newPosition: Player.PositionInfo,
+        @Player.DiscontinuityReason reason: Int,
+    ) {
+        listeners.sendEvent(EVENT_POSITION_DISCONTINUITY) { listener ->
+            @Suppress("DEPRECATION")
+            listener.onPositionDiscontinuity(reason)
+            listener.onPositionDiscontinuity(oldPosition, newPosition, reason)
         }
     }
 
