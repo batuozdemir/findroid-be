@@ -72,6 +72,11 @@ fun NavigationRoot(
         backStack.add(MainRoute)
     }
     val navigateOrReuse: (NavKey) -> Unit = backStack::navigateOrReuse
+    // Pops [key] only while it is still on top, so a repeated back request from the same screen
+    // cannot also pop the screen below it.
+    val navigateBackFrom: (NavKey) -> Unit = { key ->
+        if (backStack.lastOrNull() == key) backStack.removeAt(backStack.lastIndex)
+    }
 
     NavDisplay(
         backStack = backStack,
@@ -84,6 +89,7 @@ fun NavigationRoot(
                     navigate = navigate,
                     navigateToMain = navigateToMain,
                     navigateOrReuse = navigateOrReuse,
+                    navigateBackFrom = navigateBackFrom,
                 )
             },
     )
@@ -100,6 +106,7 @@ private fun EntryProviderScope<NavKey>.tvEntries(
     navigate: (NavKey) -> Unit,
     navigateToMain: () -> Unit,
     navigateOrReuse: (NavKey) -> Unit,
+    navigateBackFrom: (NavKey) -> Unit,
 ) {
     entry<WelcomeRoute> {
         WelcomeScreen(onContinueClick = dropUnlessResumed { navigate(ServersRoute) })
@@ -238,6 +245,7 @@ private fun EntryProviderScope<NavKey>.tvEntries(
             itemId = UUID.fromString(key.itemId),
             itemKind = key.itemKind,
             startFromBeginning = false,
+            navigateBack = { navigateBackFrom(key) },
         )
     }
     entry<SettingsRoute> {
