@@ -22,6 +22,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   Offline, "Use server setting" keeps autoplaying (#66, upstream #1050).
 
 ### Fixed
+- Opening a movie, show or episode no longer crashes on Jellyfin 12 servers when an actor has more
+  than one role. Jellyfin 12 sends one entry per role; these are now merged into one cast card with
+  the roles joined by " / ", and writers and directors are no longer listed twice (#64).
+- With the mpv player, seeking now counts as activity for the "Are you still watching?" prompt, so
+  it no longer appears while you are skipping around. mpv was reporting seeks in a way the player
+  screen didn't listen for (#70).
 - The server now learns that an episode stopped whenever playback moves to another one, not only
   on the automatic advance at the end. This covers the next and previous buttons, the chapter-skip
   gesture, the outro "Next episode" button, and media-session or remote controls, on phone and TV
