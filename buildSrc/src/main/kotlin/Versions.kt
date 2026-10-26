@@ -5,7 +5,7 @@ object Versions {
     const val APP_NAME = "1.1.0"
 
     // BE-owned: bump for each findroid-be release; versionCode = APP_CODE * 100 + BE_REVISION.
-    const val BE_REVISION = 1
+    const val BE_REVISION = 2
 
     const val COMPILE_SDK = 37
     const val TARGET_SDK = 36
