@@ -66,4 +66,6 @@ Events that fire once (navigation, toasts) use a `Channel<FooEvent>` exposed as 
 
 **Build variants:** Only one flavor (`libre`). Build types are `debug`, `release`, `staging`. Always use `Libre` variants (e.g. `assembleLibreDebug`, `compileLibreDebugKotlin`).
 
-**App ID:** `nl.midasvo.findroid.ce` (this is a fork — do not revert to the upstream `dev.jdtech.jellyfin` ID).
+**App ID:** `tr.org.bx.findroid` (findroid-be, a fork of findroid-ce `nl.midasvo.findroid.ce`, itself a fork of upstream `dev.jdtech.jellyfin`). Do not revert it: the release signing key belongs to this ID.
+
+**Versioning:** `Versions.BE_REVISION` is bumped for each findroid-be release; `versionCode = APP_CODE * 100 + BE_REVISION`, tags are `v<APP_NAME>-be.<BE_REVISION>`. Reset `BE_REVISION` to 1 when a merge from CE raises `APP_CODE`.

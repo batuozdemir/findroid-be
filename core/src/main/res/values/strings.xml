@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name" translatable="false">Findroid CE</string>
+    <string name="app_name" translatable="false">Findroid BE</string>
     <string name="app_description">Third-party native Jellyfin app</string>
     <string name="jellyfin_banner">Jellyfin banner</string>
     <string name="remove">Remove</string>

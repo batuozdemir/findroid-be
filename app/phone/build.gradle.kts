@@ -44,12 +44,12 @@ android {
     }
 
     defaultConfig {
-        applicationId = "nl.midasvo.findroid.ce"
+        applicationId = "tr.org.bx.findroid"
         minSdk = Versions.MIN_SDK
         targetSdk = Versions.TARGET_SDK
 
-        versionCode = Versions.APP_CODE
-        versionName = Versions.APP_NAME
+        versionCode = Versions.APP_CODE * 100 + Versions.BE_REVISION
+        versionName = "${Versions.APP_NAME}-be.${Versions.BE_REVISION}"
 
         testInstrumentationRunner = "dev.jdtech.jellyfin.HiltTestRunner"
     }
