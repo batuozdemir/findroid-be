@@ -14,6 +14,7 @@ import dev.jdtech.jellyfin.core.presentation.downloader.DownloadQueue
 import dev.jdtech.jellyfin.core.presentation.downloader.DownloadStatus
 import dev.jdtech.jellyfin.database.ServerDatabaseDao
 import dev.jdtech.jellyfin.models.CollectionSection
+import dev.jdtech.jellyfin.models.FindroidEpisodeDto
 import dev.jdtech.jellyfin.models.FindroidItem
 import dev.jdtech.jellyfin.models.FindroidMovie
 import dev.jdtech.jellyfin.models.FindroidShow
@@ -25,6 +26,7 @@ import dev.jdtech.jellyfin.settings.domain.AppPreferences
 import dev.jdtech.jellyfin.utils.Downloader
 import dev.jdtech.jellyfin.utils.downloadsFolder
 import java.io.File
+import java.util.UUID
 import javax.inject.Inject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -87,12 +89,14 @@ constructor(
                 val items = repository.getDownloads()
                 val itemSizes = computeItemSizes(items)
                 val sections = buildCompletedSections(items, itemSizes)
+                val showSeasons = buildShowSeasons(sections)
                 val storageInfo = calculateStorageInfo()
                 _state.emit(
                     _state.value.copy(
                         isLoading = false,
                         sections = sections,
                         itemSizes = itemSizes,
+                        showSeasons = showSeasons,
                         storageUsedBytes = storageInfo.first,
                         storageFreeBytes = storageInfo.second,
                         storageIsExternal = storageInfo.third,
@@ -147,25 +151,48 @@ constructor(
 
     fun deleteDownloadedItem(item: FindroidItem) {
         viewModelScope.launch {
+            withContext(Dispatchers.IO) { deleteItemDownloads(item) }
+            loadItems()
+        }
+    }
+
+    // Findroid BE: delete everything listed in the Library tab
+    fun deleteAllDownloads() {
+        viewModelScope.launch {
             withContext(Dispatchers.IO) {
-                if (item is FindroidShow) {
-                    val userId = repository.getUserId()
-                    val episodes = database.getEpisodesByShowId(item.id)
-                    for (epDto in episodes) {
-                        val ep = epDto.toFindroidEpisode(database, userId)
-                        downloadQueue.remove(ep.id)
-                        val source = ep.sources.firstOrNull { it.type == FindroidSourceType.LOCAL }
-                            ?: continue
-                        downloader.deleteItem(ep, source)
-                    }
-                } else {
-                    downloadQueue.remove(item.id)
-                    val source = item.sources.firstOrNull { it.type == FindroidSourceType.LOCAL }
-                        ?: return@withContext
-                    downloader.deleteItem(item, source)
-                }
+                for (item in _state.value.sections.flatMap { it.items }) deleteItemDownloads(item)
             }
             loadItems()
+        }
+    }
+
+    // Findroid BE: delete one season of a downloaded show
+    fun deleteSeasonDownloads(seasonId: UUID) {
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) {
+                deleteEpisodeDownloads(database.getEpisodesBySeasonId(seasonId))
+            }
+            loadItems()
+        }
+    }
+
+    private suspend fun deleteItemDownloads(item: FindroidItem) {
+        if (item is FindroidShow) {
+            deleteEpisodeDownloads(database.getEpisodesByShowId(item.id))
+        } else {
+            downloadQueue.remove(item.id)
+            val source = item.sources.firstOrNull { it.type == FindroidSourceType.LOCAL } ?: return
+            downloader.deleteItem(item, source)
+        }
+    }
+
+    private suspend fun deleteEpisodeDownloads(episodes: List<FindroidEpisodeDto>) {
+        val userId = repository.getUserId()
+        for (epDto in episodes) {
+            val ep = epDto.toFindroidEpisode(database, userId)
+            downloadQueue.remove(ep.id)
+            val source = ep.sources.firstOrNull { it.type == FindroidSourceType.LOCAL } ?: continue
+            downloader.deleteItem(ep, source)
         }
     }
 
@@ -254,6 +281,32 @@ constructor(
             )
                 .let { if (it.items.isNotEmpty()) sections.add(it) }
             sections
+        }
+
+    private suspend fun buildShowSeasons(
+        sections: List<CollectionSection>,
+    ): Map<UUID, List<DownloadedSeason>> =
+        withContext(Dispatchers.IO) {
+            sections.flatMap { it.items }.filterIsInstance<FindroidShow>().associate { show ->
+                val episodesBySeason =
+                    database.getEpisodesByShowId(show.id)
+                        .filter { hasCompletedSource(it.id) }
+                        .groupBy { it.seasonId }
+                val seasons =
+                    database.getSeasonsByShowId(show.id).mapNotNull { season ->
+                        val episodes = episodesBySeason[season.id] ?: return@mapNotNull null
+                        DownloadedSeason(
+                            id = season.id,
+                            name = season.name,
+                            episodeCount = episodes.size,
+                            sizeBytes =
+                                episodes.sumOf { ep ->
+                                    database.getSources(ep.id).sumOf { File(it.path).length() }
+                                },
+                        )
+                    }
+                show.id to seasons
+            }
         }
 
     private suspend fun maxSourceMtime(itemId: java.util.UUID): Long =

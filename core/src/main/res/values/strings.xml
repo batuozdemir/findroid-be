@@ -138,6 +138,15 @@
     <string name="sort_size">Size</string>
     <string name="remove_download">Remove download</string>
     <string name="remove_download_message">Remove the downloaded file for \"%1$s\"?</string>
+    <string name="delete_all_downloads">Delete all downloads</string>
+    <string name="delete_all_downloads_message">Remove every downloaded movie and episode (%1$s) from this device?</string>
+    <string name="remove_all">Remove all</string>
+    <string name="remove_season_download">Remove %1$s</string>
+    <string name="remove_season_download_message">Remove the downloaded episodes of %1$s (%2$s) from this device?</string>
+    <plurals name="downloaded_episodes_count">
+        <item quantity="one">%d episode</item>
+        <item quantity="other">%d episodes</item>
+    </plurals>
     <string name="storage_usage">%1$s used · %2$s free</string>
     <string name="storage_usage_location">%1$s · %2$s used · %3$s free</string>
     <string name="no_downloads_hint">Downloaded movies and shows will appear here</string>
