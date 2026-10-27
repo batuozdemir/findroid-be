@@ -31,6 +31,8 @@
     <string name="download_mobile_data">Download using mobile data</string>
     <string name="download_roaming">Download when roaming</string>
     <string name="pref_download_storage_location">Download storage location</string>
+    <string name="pref_download_shared_folder">Save to Movies/Findroid</string>
+    <string name="pref_download_shared_folder_summary">Visible in the Files app. The files stay if the app is uninstalled, but a reinstalled app won\'t list them. Needs All files access. Earlier downloads stay where they are.</string>
     <string name="pref_download_max_concurrent">Max concurrent downloads</string>
     <string name="pref_download_smart">Smart Downloads</string>
     <string name="pref_download_smart_summary">Automatically download the next episode when one finishes</string>

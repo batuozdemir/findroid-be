@@ -177,6 +177,9 @@ class AppPreferences @Inject constructor(val sharedPreferences: SharedPreference
     val downloadOverMobileData = Preference("pref_downloads_mobile_data", false)
     val downloadWhenRoaming = Preference("pref_downloads_roaming", false)
     val downloadStorageIndex = Preference<String?>("pref_downloads_storage_index", null)
+    // Findroid BE: save downloads to Movies/Findroid on the chosen volume instead of the app's
+    // private folder. Needs All files access.
+    val downloadSharedFolder = Preference("pref_downloads_shared_folder", false)
     val maxConcurrentDownloads = Preference("pref_downloads_max_concurrent", 2)
     val smartDownloads = Preference("pref_downloads_smart", false)
 

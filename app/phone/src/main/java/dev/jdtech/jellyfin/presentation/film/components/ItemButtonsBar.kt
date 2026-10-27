@@ -32,6 +32,7 @@ import dev.jdtech.jellyfin.core.R as CoreR
 import dev.jdtech.jellyfin.core.presentation.downloader.DownloaderState
 import dev.jdtech.jellyfin.core.presentation.dummy.dummyEpisode
 import dev.jdtech.jellyfin.utils.download.DownloadStatus
+import dev.jdtech.jellyfin.utils.storageVolumeRoot
 import dev.jdtech.jellyfin.models.FindroidItem
 import dev.jdtech.jellyfin.models.FindroidMovie
 import dev.jdtech.jellyfin.models.FindroidShow
@@ -195,8 +196,12 @@ fun ItemButtonsBar(
                     val label =
                         remember(localSource.path) {
                             val dir =
+                                // Findroid BE: match on the volume, so Movies/Findroid counts
                                 storageLocations.firstOrNull { dir ->
-                                    dir != null && localSource.path.startsWith(dir.path)
+                                    dir != null &&
+                                        localSource.path.startsWith(
+                                            storageVolumeRoot(dir).path + "/"
+                                        )
                                 }
                             val isExternal =
                                 dir != null && Environment.isExternalStorageRemovable(dir)

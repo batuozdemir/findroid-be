@@ -23,6 +23,7 @@ import dev.jdtech.jellyfin.models.UiText
 import dev.jdtech.jellyfin.repository.JellyfinRepository
 import dev.jdtech.jellyfin.settings.domain.AppPreferences
 import dev.jdtech.jellyfin.utils.Downloader
+import dev.jdtech.jellyfin.utils.downloadsFolder
 import java.io.File
 import javax.inject.Inject
 import kotlinx.coroutines.Dispatchers
@@ -303,7 +304,10 @@ constructor(
             // Media files live in external storage, but trickplay tiles and
             // cached images live under the app's internal filesDir. Count both
             // so the reported usage matches what the user is actually storing.
-            val videoBytes = File(storageDir, "downloads").sizeBytesRecursive()
+            // Findroid BE: downloads stay in whichever folder was chosen when they were made
+            val videoBytes =
+                downloadsFolder(storageDir, sharedFolder = false).sizeBytesRecursive() +
+                    downloadsFolder(storageDir, sharedFolder = true).sizeBytesRecursive()
             val trickplayBytes = File(context.filesDir, "trickplay").sizeBytesRecursive()
             val imagesBytes = File(context.filesDir, "images").sizeBytesRecursive()
             val usedBytes = videoBytes + trickplayBytes + imagesBytes

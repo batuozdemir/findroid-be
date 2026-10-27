@@ -136,6 +136,13 @@ class DownloaderImpl(
 
         val existingDownloadId = existingSource?.downloadId
         if (existingSource != null && existingDownloadId != null) {
+            // Findroid BE: a partial in Movies/Findroid can't resume without All files access
+            if (isInSharedFolder(existingSource.path) && !hasAllFilesAccess()) {
+                return@coroutineScope Pair(
+                    -1L,
+                    UiText.StringResource(CoreR.string.all_files_access_needed),
+                )
+            }
             return@coroutineScope try {
                 // Re-resolve the URL from the server (not persisted). Prefer the existing
                 // row's own source id so we resume the same source that was started; fall
@@ -203,7 +210,17 @@ class DownloaderImpl(
             )
             val extension = guessExtension(source.path)
             val relativePath = buildDownloadPath(item, source.id, extension)
-            val destFile = File(storageLocation, "downloads/$relativePath.download")
+            val sharedFolder =
+                appPreferences.getValue(appPreferences.downloadSharedFolder) &&
+                    isSharedFolderSupported()
+            if (sharedFolder && !hasAllFilesAccess()) {
+                return@coroutineScope Pair(
+                    -1,
+                    UiText.StringResource(CoreR.string.all_files_access_needed),
+                )
+            }
+            val destFile =
+                File(downloadsFolder(storageLocation, sharedFolder), "$relativePath.download")
             destFile.parentFile?.mkdirs()
             // A leftover .download file from a previous failed/cancelled attempt with no DB
             // row is an orphan. Drop it before starting so the engine starts at byte 0.
@@ -266,7 +283,14 @@ class DownloaderImpl(
             database.insertUserData(item.toFindroidUserDataDto(jellyfinRepository.getUserId()))
 
             val resolvedStorageIndex = dirs.indexOf(storageLocation)
-            downloadExternalMediaStreams(item, source, resolvedStorageIndex, allowMetered, allowRoaming)
+            downloadExternalMediaStreams(
+                item,
+                source,
+                resolvedStorageIndex,
+                allowMetered,
+                allowRoaming,
+                sharedFolder = sharedFolder,
+            )
 
             segments.forEach { database.insertSegment(it.toFindroidSegmentsDto(item.id)) }
 
@@ -372,7 +396,7 @@ class DownloaderImpl(
      */
     private fun pruneEmptyParents(file: File) {
         var dir = file.parentFile ?: return
-        while (dir.name != "downloads" && dir.listFiles()?.isEmpty() == true) {
+        while (!isDownloadsRoot(dir) && dir.listFiles()?.isEmpty() == true) {
             dir.delete()
             dir = dir.parentFile ?: return
         }
@@ -428,13 +452,15 @@ class DownloaderImpl(
         storageIndex: Int = 0,
         allowMetered: Boolean = false,
         allowRoaming: Boolean = false,
+        sharedFolder: Boolean = false,
     ) {
         val dirs = context.getExternalFilesDirs(null)
         val storageLocation = dirs.getOrNull(storageIndex)
             ?.takeIf { Environment.getExternalStorageState(it) == Environment.MEDIA_MOUNTED }
             ?: dirs.getOrNull(0)?.takeIf { Environment.getExternalStorageState(it) == Environment.MEDIA_MOUNTED }
             ?: return
-        val downloadsDir = File(storageLocation, "downloads")
+        // Findroid BE: same folder as the video, decided once when the download started
+        val downloadsDir = downloadsFolder(storageLocation, sharedFolder)
         downloadsDir.mkdirs()
 
         // Fresh pass only: this is reached when no in-progress source row exists for the
@@ -772,7 +798,15 @@ class DownloaderImpl(
         val mountedRoots = context.getExternalFilesDirs(null)
             .filterNotNull()
             .filter { Environment.getExternalStorageState(it) == Environment.MEDIA_MOUNTED }
-            .map { File(it, "downloads").absolutePath }
+            .flatMap { dir ->
+                // Findroid BE: Movies/Findroid only while it is readable; without All files
+                // access its files would look missing and be swept from the library.
+                listOfNotNull(
+                    downloadsFolder(dir, sharedFolder = false),
+                    downloadsFolder(dir, sharedFolder = true).takeIf { hasAllFilesAccess() },
+                )
+            }
+            .map { it.absolutePath }
 
         val knownPaths = mutableSetOf<String>()
         suspend fun remember(source: FindroidSourceDto) {
