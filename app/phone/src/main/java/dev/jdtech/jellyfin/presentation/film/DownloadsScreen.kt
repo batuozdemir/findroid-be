@@ -44,15 +44,19 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.res.painterResource
 import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.PreviewScreenSizes
 import androidx.compose.ui.unit.dp
@@ -66,11 +70,13 @@ import dev.jdtech.jellyfin.core.presentation.downloader.DownloadStatus
 import dev.jdtech.jellyfin.core.presentation.dummy.dummyMovies
 import dev.jdtech.jellyfin.film.presentation.downloads.ActiveDownload
 import dev.jdtech.jellyfin.film.presentation.downloads.DownloadSortOrder
+import dev.jdtech.jellyfin.film.presentation.downloads.DownloadedSeason
 import dev.jdtech.jellyfin.film.presentation.downloads.DownloadsState
 import dev.jdtech.jellyfin.film.presentation.downloads.DownloadsViewModel
 import dev.jdtech.jellyfin.models.CollectionSection
 import dev.jdtech.jellyfin.models.FindroidEpisode
 import dev.jdtech.jellyfin.models.FindroidItem
+import dev.jdtech.jellyfin.models.FindroidShow
 import dev.jdtech.jellyfin.models.UiText
 import dev.jdtech.jellyfin.presentation.film.components.ActiveDownloadCard
 import dev.jdtech.jellyfin.presentation.film.components.Direction
@@ -102,6 +108,8 @@ fun DownloadsScreen(
         state = state,
         onItemClick = onItemClick,
         onItemDelete = { viewModel.deleteDownloadedItem(it) },
+        onSeasonDelete = { viewModel.deleteSeasonDownloads(it.id) },
+        onDeleteAll = { viewModel.deleteAllDownloads() },
         onSortOrderChange = { viewModel.setSortOrder(it) },
         onCancelDownload = { viewModel.cancelDownload(it) },
         onDismissDownload = { viewModel.dismissCompletedDownload(it) },
@@ -116,6 +124,8 @@ private fun DownloadsScreenLayout(
     state: DownloadsState,
     onItemClick: (FindroidItem) -> Unit,
     onItemDelete: (FindroidItem) -> Unit,
+    onSeasonDelete: (DownloadedSeason) -> Unit,
+    onDeleteAll: () -> Unit,
     onSortOrderChange: (DownloadSortOrder) -> Unit,
     onCancelDownload: (ActiveDownload) -> Unit,
     onDismissDownload: (ActiveDownload) -> Unit,
@@ -125,6 +135,7 @@ private fun DownloadsScreenLayout(
     val context = LocalContext.current
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
     var selectedTab by rememberSaveable { mutableIntStateOf(DownloadsTab.LIBRARY.ordinal) }
+    var showDeleteAllDialog by rememberSaveable { mutableStateOf(false) }
 
     Scaffold(
         modifier =
@@ -134,6 +145,17 @@ private fun DownloadsScreenLayout(
         topBar = {
             TopAppBar(
                 title = { Text(text = stringResource(CoreR.string.title_download)) },
+                actions = {
+                    // Findroid BE: delete all downloads
+                    if (selectedTab == DownloadsTab.LIBRARY.ordinal && state.sections.isNotEmpty()) {
+                        IconButton(onClick = { showDeleteAllDialog = true }) {
+                            Icon(
+                                painter = painterResource(CoreR.drawable.ic_trash),
+                                contentDescription = stringResource(CoreR.string.delete_all_downloads),
+                            )
+                        }
+                    }
+                },
                 windowInsets = WindowInsets.statusBars.union(WindowInsets.displayCutout),
                 scrollBehavior = scrollBehavior,
             )
@@ -189,6 +211,7 @@ private fun DownloadsScreenLayout(
                     state = state,
                     onItemClick = onItemClick,
                     onItemDelete = onItemDelete,
+                    onSeasonDelete = onSeasonDelete,
                     onSortOrderChange = onSortOrderChange,
                     context = context,
                 )
@@ -202,6 +225,91 @@ private fun DownloadsScreenLayout(
             }
         }
     }
+
+    if (showDeleteAllDialog) {
+        val totalBytes = state.sections.flatMap { it.items }.sumOf { state.itemSizes[it.id] ?: 0L }
+        AlertDialog(
+            onDismissRequest = { showDeleteAllDialog = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    showDeleteAllDialog = false
+                    onDeleteAll()
+                }) { Text(stringResource(CoreR.string.remove_all)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteAllDialog = false }) {
+                    Text(stringResource(CoreR.string.cancel))
+                }
+            },
+            title = { Text(stringResource(CoreR.string.delete_all_downloads)) },
+            text = {
+                Text(
+                    stringResource(
+                        CoreR.string.delete_all_downloads_message,
+                        Formatter.formatFileSize(context, totalBytes),
+                    )
+                )
+            },
+        )
+    }
+}
+
+@Composable
+private fun DeleteSeasonsDialog(
+    showName: String,
+    seasons: List<DownloadedSeason>,
+    onSeasonDelete: (DownloadedSeason) -> Unit,
+    onDeleteAll: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val context = LocalContext.current
+    // Hide a season as soon as it's tapped, so a second tap can't delete it twice
+    // before the list reloads.
+    var removed by remember { mutableStateOf(emptySet<java.util.UUID>()) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            TextButton(onClick = onDeleteAll) { Text(stringResource(CoreR.string.remove_all)) }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(CoreR.string.cancel)) }
+        },
+        title = { Text(showName) },
+        text = {
+            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                for (season in seasons.filterNot { it.id in removed }) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(text = season.name, style = MaterialTheme.typography.bodyLarge)
+                            Text(
+                                text =
+                                    pluralStringResource(
+                                        CoreR.plurals.downloaded_episodes_count,
+                                        season.episodeCount,
+                                        season.episodeCount,
+                                    ) + " · " + Formatter.formatShortFileSize(context, season.sizeBytes),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        IconButton(onClick = {
+                            removed = removed + season.id
+                            onSeasonDelete(season)
+                        }) {
+                            Icon(
+                                painter = painterResource(CoreR.drawable.ic_trash),
+                                contentDescription =
+                                    stringResource(CoreR.string.remove_season_download, season.name),
+                            )
+                        }
+                    }
+                }
+            }
+        },
+    )
 }
 
 @Composable
@@ -209,6 +317,7 @@ private fun DownloadsTabContent(
     state: DownloadsState,
     onItemClick: (FindroidItem) -> Unit,
     onItemDelete: (FindroidItem) -> Unit,
+    onSeasonDelete: (DownloadedSeason) -> Unit,
     onSortOrderChange: (DownloadSortOrder) -> Unit,
     context: android.content.Context,
 ) {
@@ -308,7 +417,21 @@ private fun DownloadsTabContent(
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             }
-                            if (showDeleteDialog) {
+                            // Findroid BE: a show's trash button lists its seasons
+                            val seasons =
+                                if (item is FindroidShow) state.showSeasons[item.id] else null
+                            if (showDeleteDialog && seasons != null) {
+                                DeleteSeasonsDialog(
+                                    showName = item.name,
+                                    seasons = seasons,
+                                    onSeasonDelete = onSeasonDelete,
+                                    onDeleteAll = {
+                                        showDeleteDialog = false
+                                        onItemDelete(item)
+                                    },
+                                    onDismiss = { showDeleteDialog = false },
+                                )
+                            } else if (showDeleteDialog) {
                                 AlertDialog(
                                     onDismissRequest = { showDeleteDialog = false },
                                     confirmButton = {
@@ -469,6 +592,8 @@ private fun DownloadsScreenLayoutPreview() {
                 ),
             onItemClick = {},
             onItemDelete = {},
+            onSeasonDelete = {},
+            onDeleteAll = {},
             onSortOrderChange = {},
             onCancelDownload = {},
             onDismissDownload = {},
@@ -486,6 +611,8 @@ private fun DownloadsScreenLayoutEmptyPreview() {
             state = DownloadsState(),
             onItemClick = {},
             onItemDelete = {},
+            onSeasonDelete = {},
+            onDeleteAll = {},
             onSortOrderChange = {},
             onCancelDownload = {},
             onDismissDownload = {},

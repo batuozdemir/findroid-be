@@ -26,12 +26,21 @@ data class ActiveDownload(
 
 enum class DownloadSortOrder { NAME, DATE, SIZE }
 
+data class DownloadedSeason(
+    val id: UUID,
+    val name: String,
+    val episodeCount: Int,
+    val sizeBytes: Long,
+)
+
 data class DownloadsState(
     val queueItems: List<ActiveDownload> = emptyList(),
     val hasCompleted: Boolean = false,
     val sortOrder: DownloadSortOrder = DownloadSortOrder.DATE,
     val sections: List<CollectionSection> = emptyList(),
     val itemSizes: Map<UUID, Long> = emptyMap(),
+    /** Downloaded seasons of each show in [sections], keyed by show id. */
+    val showSeasons: Map<UUID, List<DownloadedSeason>> = emptyMap(),
     val storageUsedBytes: Long = 0L,
     val storageFreeBytes: Long = 0L,
     val storageIsExternal: Boolean = false,
