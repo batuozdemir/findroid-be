@@ -41,10 +41,16 @@ import dev.jdtech.jellyfin.presentation.film.components.HomeCarousel
 import dev.jdtech.jellyfin.presentation.film.components.HomeHeader
 import dev.jdtech.jellyfin.presentation.film.components.HomeSection
 import dev.jdtech.jellyfin.presentation.film.components.HomeView
+import dev.jdtech.jellyfin.presentation.film.components.ServerAddressToggle
 import dev.jdtech.jellyfin.presentation.film.components.ServerSelectionBottomSheet
 import dev.jdtech.jellyfin.presentation.theme.FindroidTheme
 import dev.jdtech.jellyfin.presentation.theme.spacings
 import dev.jdtech.jellyfin.presentation.utils.rememberSafePadding
+import dev.jdtech.jellyfin.setup.presentation.addresses.ServerAddressToggleAction
+import dev.jdtech.jellyfin.setup.presentation.addresses.ServerAddressToggleEvent
+import dev.jdtech.jellyfin.setup.presentation.addresses.ServerAddressToggleState
+import dev.jdtech.jellyfin.setup.presentation.addresses.ServerAddressToggleViewModel
+import dev.jdtech.jellyfin.utils.ObserveAsEvents
 import kotlinx.coroutines.launch
 
 @Composable
@@ -55,13 +61,27 @@ fun HomeScreen(
     onManageServers: () -> Unit,
     onItemClick: (item: FindroidItem) -> Unit,
     viewModel: HomeViewModel = hiltViewModel(),
+    addressToggleViewModel: ServerAddressToggleViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val addressToggleState by addressToggleViewModel.state.collectAsStateWithLifecycle()
 
     LaunchedEffect(true) { viewModel.loadData() }
 
+    // Findroid BE: state.server is reloaded with every loadData(), so this also picks up an address
+    // change made through the server selection sheet.
+    LaunchedEffect(state.server) { addressToggleViewModel.loadAddresses() }
+
+    ObserveAsEvents(addressToggleViewModel.events) { event ->
+        when (event) {
+            is ServerAddressToggleEvent.AddressChanged -> viewModel.loadData()
+        }
+    }
+
     HomeScreenLayout(
         state = state,
+        addressToggleState = addressToggleState,
+        onAddressToggleAction = { action -> addressToggleViewModel.onAction(action) },
         onAction = { action ->
             when (action) {
                 is HomeAction.OnItemClick -> onItemClick(action.item)
@@ -78,7 +98,12 @@ fun HomeScreen(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun HomeScreenLayout(state: HomeState, onAction: (HomeAction) -> Unit) {
+private fun HomeScreenLayout(
+    state: HomeState,
+    addressToggleState: ServerAddressToggleState,
+    onAddressToggleAction: (ServerAddressToggleAction) -> Unit,
+    onAction: (HomeAction) -> Unit,
+) {
     val scope = rememberCoroutineScope()
     val safePadding = rememberSafePadding(handleStartInsets = false)
 
@@ -102,6 +127,18 @@ private fun HomeScreenLayout(state: HomeState, onAction: (HomeAction) -> Unit) {
                 contentPadding = PaddingValues(top = contentPaddingTop, bottom = paddingBottom),
                 verticalArrangement = Arrangement.spacedBy(MaterialTheme.spacings.medium),
             ) {
+                // Findroid BE: shown at the top of the list rather than in the header, which has no
+                // room for it next to the server name and the action buttons on narrow phones.
+                if (addressToggleState.addresses.size >= 2) {
+                    item(key = "address-toggle") {
+                        ServerAddressToggle(
+                            state = addressToggleState,
+                            enabled = !state.isLoading,
+                            onAction = onAddressToggleAction,
+                            modifier = Modifier.padding(start = paddingStart, end = paddingEnd),
+                        )
+                    }
+                }
                 state.suggestionsSection?.let { section ->
                     item(key = section.id) {
                         HomeCarousel(
@@ -195,6 +232,8 @@ private fun HomeScreenLayoutPreview() {
                     views = listOf(dummyHomeView),
                     error = Exception("Failed to load data"),
                 ),
+            addressToggleState = ServerAddressToggleState(),
+            onAddressToggleAction = {},
             onAction = {},
         )
     }
