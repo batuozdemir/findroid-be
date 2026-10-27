@@ -64,6 +64,11 @@ class MPVPlayer(
     private val mpvLib: MPVLib
     private val audioManager: AudioManager by lazy { context.getSystemService()!! }
     private var audioFocusCallback: () -> Unit = {}
+
+    // Findroid BE: the linear gain asked for through setVolume and the audio-focus ducking on top
+    // of it, kept apart so a volume change while ducked is neither undone nor doubled on regain.
+    private var requestedVolume = 1f
+    private var duckFactor = 1f
     private lateinit var audioFocusRequest: AudioFocusRequestCompat
     private val handler: Handler = Handler(context.mainLooper)
 
@@ -203,6 +208,8 @@ class MPVPlayer(
         mpvLib.setOptionString("volume-max", "150")
 
         mpvLib.init()
+        requestedVolume =
+            mpvLib.getPropertyDouble("volume")?.let { Math.pow(it / 100, 3.0).toFloat() } ?: 1f
 
         mpvLib.addObserver(this)
 
@@ -657,9 +664,12 @@ class MPVPlayer(
                 }
             }
             AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> {
-                mpvLib.command(arrayOf("multiply", "volume", "$AUDIO_FOCUS_DUCKING"))
+                // Cubed: as loud as CE's multiply on mpv's cubic volume property
+                duckFactor = Math.pow(AUDIO_FOCUS_DUCKING.toDouble(), 3.0).toFloat()
+                applyVolume()
                 audioFocusCallback = {
-                    mpvLib.command(arrayOf("multiply", "volume", "${1f / AUDIO_FOCUS_DUCKING}"))
+                    duckFactor = 1f
+                    applyVolume()
                 }
             }
             AudioManager.AUDIOFOCUS_GAIN -> {
@@ -1323,8 +1333,14 @@ class MPVPlayer(
      * @param audioVolume Linear output gain to apply to all audio channels.
      */
     override fun setVolume(audioVolume: Float) {
+        requestedVolume = audioVolume
+        applyVolume()
+    }
+
+    private fun applyVolume() {
         // mpv's volume is cubic: gain = (volume / 100)^3.
-        mpvLib.setPropertyDouble("volume", 100 * Math.cbrt(audioVolume.toDouble()))
+        val gain = (requestedVolume * duckFactor).toDouble()
+        mpvLib.setPropertyDouble("volume", 100 * Math.cbrt(gain))
     }
 
     /**

@@ -449,6 +449,12 @@ class PlayerGestureHelper(
         val systemAtMax =
             audioManager.getStreamVolume(AudioManager.STREAM_MUSIC) ==
                 audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+        // A boost left over after the system volume was lowered elsewhere: drop it and leave the
+        // key to the system, so volume down never sets the system volume back to its maximum.
+        if (!systemAtMax && boostPercent > 100f) {
+            activity.viewModel.setVolumeBoost(1f)
+            return false
+        }
         val percent =
             when {
                 keyCode == KeyEvent.KEYCODE_VOLUME_UP && systemAtMax && boostPercent < maxPercent ->

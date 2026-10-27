@@ -4,6 +4,7 @@ import android.app.Application
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.media.AudioManager
 import android.media.audiofx.LoudnessEnhancer
 import android.widget.Toast
 import androidx.lifecycle.SavedStateHandle
@@ -111,8 +112,8 @@ constructor(
 
     private val trackSelector = DefaultTrackSelector(application)
 
-    // Findroid BE: volume boost above the system maximum, as a linear gain (1 = unchanged). It
-    // lives as long as the player, so the next episode keeps it.
+    // Findroid BE: volume boost above the system maximum, as a linear gain (1 = unchanged). The
+    // player keeps it across episodes; the last value is saved for the next video.
     val maxVolumeBoost =
         ((appPreferences.getValue(appPreferences.playerMaxVolume).toIntOrNull() ?: 100) / 100f)
             .coerceAtLeast(1f)
@@ -337,6 +338,16 @@ constructor(
             }
 
             else -> throw RuntimeException("$playerBackend is not a valid player backend")
+        }
+
+        // Findroid BE: bring back the last boost, but only on top of a maxed-out system volume, so
+        // playback never starts boosted while the system volume is turned down.
+        val audioManager = application.getSystemService(AudioManager::class.java)
+        if (
+            audioManager.getStreamVolume(AudioManager.STREAM_MUSIC) ==
+                audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+        ) {
+            setVolumeBoost(appPreferences.getValue(appPreferences.playerVolumeBoost))
         }
     }
 
@@ -858,6 +869,7 @@ constructor(
 
     fun setVolumeBoost(boost: Float) {
         volumeBoost = boost.coerceIn(1f, maxVolumeBoost)
+        appPreferences.setValue(appPreferences.playerVolumeBoost, volumeBoost)
         val exoPlayer = player as? ExoPlayer
         if (exoPlayer == null) {
             player.volume = volumeBoost
