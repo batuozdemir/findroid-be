@@ -19,10 +19,16 @@ fun downloadsFolder(storageDir: File, sharedFolder: Boolean): File =
     if (sharedFolder) File(storageVolumeRoot(storageDir), SHARED_DOWNLOADS_DIR)
     else File(storageDir, "downloads")
 
+/** Whether [path] is inside Movies/Findroid on any volume. */
+fun isInSharedFolder(path: String): Boolean = path.contains("/$SHARED_DOWNLOADS_DIR/")
+
+/** The shared folder needs All files access, which exists from Android 11. */
+fun isSharedFolderSupported(): Boolean = Build.VERSION.SDK_INT >= Build.VERSION_CODES.R
+
 /** Whether [dir] is a downloads folder itself, where cleaning up empty folders must stop. */
 fun isDownloadsRoot(dir: File): Boolean =
     dir.name == "downloads" || dir.path.endsWith("/$SHARED_DOWNLOADS_DIR")
 
 /** Whether the app holds All files access, which the shared folder needs. */
 fun hasAllFilesAccess(): Boolean =
-    Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && Environment.isExternalStorageManager()
+    isSharedFolderSupported() && Environment.isExternalStorageManager()

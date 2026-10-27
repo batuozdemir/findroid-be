@@ -304,12 +304,10 @@ constructor(
             // Media files live in external storage, but trickplay tiles and
             // cached images live under the app's internal filesDir. Count both
             // so the reported usage matches what the user is actually storing.
+            // Findroid BE: downloads stay in whichever folder was chosen when they were made
             val videoBytes =
-                downloadsFolder(
-                        storageDir,
-                        appPreferences.getValue(appPreferences.downloadSharedFolder),
-                    )
-                    .sizeBytesRecursive()
+                downloadsFolder(storageDir, sharedFolder = false).sizeBytesRecursive() +
+                    downloadsFolder(storageDir, sharedFolder = true).sizeBytesRecursive()
             val trickplayBytes = File(context.filesDir, "trickplay").sizeBytesRecursive()
             val imagesBytes = File(context.filesDir, "images").sizeBytesRecursive()
             val usedBytes = videoBytes + trickplayBytes + imagesBytes

@@ -875,6 +875,10 @@ class SettingsViewModel @Inject constructor(
                                                         R.string.pref_download_shared_folder,
                                                     descriptionStringRes =
                                                         R.string.pref_download_shared_folder_summary,
+                                                    // Findroid BE: All files access is Android 11+
+                                                    enabled =
+                                                        Build.VERSION.SDK_INT >=
+                                                            Build.VERSION_CODES.R,
                                                     supportedDeviceTypes = listOf(DeviceType.PHONE),
                                                     backendPreference =
                                                         appPreferences.downloadSharedFolder,
