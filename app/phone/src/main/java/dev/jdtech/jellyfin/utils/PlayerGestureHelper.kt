@@ -8,6 +8,7 @@ import android.os.Build
 import android.os.SystemClock
 import android.provider.Settings
 import android.view.GestureDetector
+import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.ScaleGestureDetector
 import android.view.View
@@ -69,6 +70,9 @@ class PlayerGestureHelper(
 
     private var playbackSpeedIncrease: Float = 2f
     private var lastPlaybackSpeed: Float = 0f
+
+    // Findroid BE: boost percent per volume key press
+    private val volumeKeyBoostStep: Float = 10f
 
     private val screenWidth = Resources.getSystem().displayMetrics.widthPixels
     private val screenHeight = Resources.getSystem().displayMetrics.heightPixels
@@ -337,36 +341,24 @@ class PlayerGestureHelper(
                     val ratioChange = distanceY / distanceFull
 
                     if (firstEvent.x.toInt() > viewCenterX) {
-                        // Swiping on the right, change volume
-
-                        val currentVolume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
+                        // Swiping on the right, change volume. Findroid BE: the swipe tracks
+                        // percent, 100 being the system maximum; above it is the player's boost.
+                        val maxPercent = activity.viewModel.maxVolumeBoost * 100
                         if (swipeGestureValueTrackerVolume == -1f)
-                            swipeGestureValueTrackerVolume = currentVolume.toFloat()
+                            swipeGestureValueTrackerVolume = currentVolumePercent()
 
-                        val maxVolume = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
-                        val change = ratioChange * maxVolume
+                        // One full swipe covers the system range, another the boost range
+                        val inBoostRange =
+                            swipeGestureValueTrackerVolume > 100f ||
+                                (swipeGestureValueTrackerVolume == 100f && ratioChange > 0)
+                        val range = if (inBoostRange) maxPercent - 100f else 100f
                         swipeGestureValueTrackerVolume =
-                            (swipeGestureValueTrackerVolume + change).coerceIn(
+                            (swipeGestureValueTrackerVolume + ratioChange * range).coerceIn(
                                 0f,
-                                maxVolume.toFloat(),
+                                maxPercent,
                             )
 
-                        audioManager.setStreamVolume(
-                            AudioManager.STREAM_MUSIC,
-                            swipeGestureValueTrackerVolume.toInt(),
-                            0,
-                        )
-
-                        activity.binding.gestureVolumeLayout.visibility = View.VISIBLE
-                        activity.binding.gestureVolumeProgressBar.max = maxVolume.times(100)
-                        activity.binding.gestureVolumeProgressBar.progress =
-                            swipeGestureValueTrackerVolume.times(100).toInt()
-                        val process =
-                            (swipeGestureValueTrackerVolume / maxVolume.toFloat())
-                                .times(100)
-                                .toInt()
-                        activity.binding.gestureVolumeText.text = "$process%"
-                        activity.binding.gestureVolumeImage.setImageLevel(process)
+                        setVolumePercent(swipeGestureValueTrackerVolume)
 
                         swipeGestureVolumeOpen = true
                     } else {
@@ -414,6 +406,64 @@ class PlayerGestureHelper(
                 }
             },
         )
+
+    /** Findroid BE: the system volume in percent, or the boost when the system is at its max. */
+    private fun currentVolumePercent(): Float {
+        val currentVolume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
+        val maxVolume = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+        return if (currentVolume < maxVolume) currentVolume * 100f / maxVolume
+        else activity.viewModel.volumeBoost * 100
+    }
+
+    /**
+     * Findroid BE: sets the system volume up to 100 % and the player's boost above it, and shows
+     * the volume overlay.
+     */
+    @SuppressLint("SetTextI18n")
+    private fun setVolumePercent(percent: Float) {
+        val maxVolume = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+        audioManager.setStreamVolume(
+            AudioManager.STREAM_MUSIC,
+            (percent.coerceAtMost(100f) / 100 * maxVolume).toInt(),
+            0,
+        )
+        activity.viewModel.setVolumeBoost(percent / 100)
+
+        activity.binding.gestureVolumeLayout.visibility = View.VISIBLE
+        activity.binding.gestureVolumeProgressBar.max =
+            (activity.viewModel.maxVolumeBoost * 100).toInt()
+        activity.binding.gestureVolumeProgressBar.progress = percent.toInt()
+        activity.binding.gestureVolumeText.text = "${percent.toInt()}%"
+        // The icon's level list ends at 100
+        activity.binding.gestureVolumeImage.setImageLevel(percent.toInt().coerceAtMost(100))
+    }
+
+    /**
+     * Findroid BE: once the system volume is at its maximum, volume up raises the boost; volume
+     * down lowers the boost before the system volume. Returns false to leave the key to the
+     * system.
+     */
+    fun onVolumeKey(keyCode: Int): Boolean {
+        val boostPercent = activity.viewModel.volumeBoost * 100
+        val maxPercent = activity.viewModel.maxVolumeBoost * 100
+        val systemAtMax =
+            audioManager.getStreamVolume(AudioManager.STREAM_MUSIC) ==
+                audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+        val percent =
+            when {
+                keyCode == KeyEvent.KEYCODE_VOLUME_UP && systemAtMax && boostPercent < maxPercent ->
+                    boostPercent + volumeKeyBoostStep
+                keyCode == KeyEvent.KEYCODE_VOLUME_DOWN && boostPercent > 100f ->
+                    boostPercent - volumeKeyBoostStep
+                else -> return false
+            }
+        setVolumePercent(percent.coerceIn(100f, maxPercent))
+        activity.binding.gestureVolumeLayout.apply {
+            removeCallbacks(hideGestureVolumeIndicatorOverlayAction)
+            postDelayed(hideGestureVolumeIndicatorOverlayAction, 1000)
+        }
+        return true
+    }
 
     private val hideGestureVolumeIndicatorOverlayAction = Runnable {
         activity.binding.gestureVolumeLayout.visibility = View.GONE
@@ -478,6 +528,9 @@ class PlayerGestureHelper(
                     removeCallbacks(hideGestureVolumeIndicatorOverlayAction)
                     postDelayed(hideGestureVolumeIndicatorOverlayAction, 1000)
                     swipeGestureVolumeOpen = false
+                    // Findroid BE: the next swipe starts from the real volume, which the
+                    // volume keys may have changed in between
+                    swipeGestureValueTrackerVolume = -1f
                 }
             }
             activity.binding.gestureBrightnessLayout.apply {

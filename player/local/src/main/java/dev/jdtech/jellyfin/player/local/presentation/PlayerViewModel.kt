@@ -4,6 +4,7 @@ import android.app.Application
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.media.audiofx.LoudnessEnhancer
 import android.widget.Toast
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
@@ -40,6 +41,8 @@ import java.util.UUID
 import javax.inject.Inject
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.math.ceil
+import kotlin.math.log10
+import kotlin.math.roundToInt
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
@@ -107,6 +110,17 @@ constructor(
     private var items: MutableList<PlayerItem> = mutableListOf()
 
     private val trackSelector = DefaultTrackSelector(application)
+
+    // Findroid BE: volume boost above the system maximum, as a linear gain (1 = unchanged). It
+    // lives as long as the player, so the next episode keeps it.
+    val maxVolumeBoost =
+        ((appPreferences.getValue(appPreferences.playerMaxVolume).toIntOrNull() ?: 100) / 100f)
+            .coerceAtLeast(1f)
+    var volumeBoost = 1f
+        private set
+
+    private var loudnessEnhancer: LoudnessEnhancer? = null
+
     var playWhenReady = true
     private var currentMediaItemIndex = savedStateHandle["mediaItemIndex"] ?: 0
     private var playbackPosition: Long = savedStateHandle["position"] ?: 0
@@ -417,6 +431,8 @@ constructor(
         playbackPosition = 0L
         currentMediaItemIndex = 0
         player.removeListener(this)
+        loudnessEnhancer?.release()
+        loudnessEnhancer = null
         player.release()
 
         stopped?.let { reportStopped(it) }
@@ -838,6 +854,35 @@ constructor(
             }
         }
         Timber.d("Changed player state to $stateString")
+    }
+
+    fun setVolumeBoost(boost: Float) {
+        volumeBoost = boost.coerceIn(1f, maxVolumeBoost)
+        val exoPlayer = player as? ExoPlayer
+        if (exoPlayer == null) {
+            player.volume = volumeBoost
+            return
+        }
+        if (volumeBoost == 1f && loudnessEnhancer == null) return
+        // Session 0 would be the global output mix, not this player.
+        if (exoPlayer.audioSessionId == C.AUDIO_SESSION_ID_UNSET) return
+        try {
+            val enhancer =
+                loudnessEnhancer
+                    ?: LoudnessEnhancer(exoPlayer.audioSessionId).also { loudnessEnhancer = it }
+            // Target gain in millibels: 200 % is +6 dB, 300 % is +9.5 dB.
+            enhancer.setTargetGain((2000 * log10(volumeBoost)).roundToInt())
+            enhancer.setEnabled(volumeBoost > 1f)
+        } catch (e: RuntimeException) {
+            Timber.e(e, "Volume boost: LoudnessEnhancer unavailable")
+        }
+    }
+
+    override fun onAudioSessionIdChanged(audioSessionId: Int) {
+        // The enhancer is bound to the old session; rebuild it on the new one.
+        loudnessEnhancer?.release()
+        loudnessEnhancer = null
+        setVolumeBoost(volumeBoost)
     }
 
     override fun onCleared() {

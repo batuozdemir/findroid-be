@@ -350,6 +350,14 @@ class SettingsViewModel @Inject constructor(
                                                     options = R.array.player_backends,
                                                     optionValues = R.array.player_backends
                                                 ),
+                                                PreferenceSelect(
+                                                    nameStringResource = R.string.player_max_volume,
+                                                    supportedDeviceTypes = listOf(DeviceType.PHONE),
+                                                    backendPreference =
+                                                        appPreferences.playerMaxVolume,
+                                                    options = R.array.player_max_volume,
+                                                    optionValues = R.array.player_max_volume_values,
+                                                ),
                                                 PreferenceCategory(
                                                     nameStringResource = R.string.mpv_options,
                                                     onClick = {

@@ -199,6 +199,8 @@ class MPVPlayer(
         mpvLib.setOptionString("save-position-on-quit", "no")
         mpvLib.setOptionString("ytdl", "no")
         mpvLib.setOptionString("audio-set-media-role", "yes")
+        // Findroid BE: room for the volume boost. mpv's volume is cubic, so 145 is a gain of 3x.
+        mpvLib.setOptionString("volume-max", "150")
 
         mpvLib.init()
 
@@ -1321,7 +1323,8 @@ class MPVPlayer(
      * @param audioVolume Linear output gain to apply to all audio channels.
      */
     override fun setVolume(audioVolume: Float) {
-        TODO("Not yet implemented")
+        // mpv's volume is cubic: gain = (volume / 100)^3.
+        mpvLib.setPropertyDouble("volume", 100 * Math.cbrt(audioVolume.toDouble()))
     }
 
     /**
@@ -1330,7 +1333,7 @@ class MPVPlayer(
      * @return The linear gain applied to all audio channels.
      */
     override fun getVolume(): Float {
-        return mpvLib.getPropertyInt("volume")?.div(100f) ?: 0f
+        return mpvLib.getPropertyDouble("volume")?.let { Math.pow(it / 100, 3.0).toFloat() } ?: 0f
     }
 
     /**

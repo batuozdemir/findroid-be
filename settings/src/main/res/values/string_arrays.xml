@@ -38,6 +38,18 @@
         <item>speed</item>
         <item>disabled</item>
     </string-array>
+    <string-array name="player_max_volume" translatable="false">
+        <item>100%</item>
+        <item>150%</item>
+        <item>200%</item>
+        <item>300%</item>
+    </string-array>
+    <string-array name="player_max_volume_values" translatable="false">
+        <item>100</item>
+        <item>150</item>
+        <item>200</item>
+        <item>300</item>
+    </string-array>
     <string-array name="player_autoplay_next">
         <item>@string/player_autoplay_next_server</item>
         <item>@string/player_autoplay_next_on</item>
