@@ -1,8 +1,12 @@
 package dev.jdtech.jellyfin.settings.presentation.settings
 
 import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import android.os.Build
+import android.os.Environment
 import android.os.StatFs
+import android.provider.Settings
 import android.text.format.Formatter
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -866,6 +870,16 @@ class SettingsViewModel @Inject constructor(
                                                     backendPreference = appPreferences.downloadStorageIndex,
                                                     dynamicOptions = emptyList(), // filled in loadPreferences
                                                 ),
+                                                PreferenceSwitch(
+                                                    nameStringResource =
+                                                        R.string.pref_download_shared_folder,
+                                                    descriptionStringRes =
+                                                        R.string.pref_download_shared_folder_summary,
+                                                    supportedDeviceTypes = listOf(DeviceType.PHONE),
+                                                    backendPreference =
+                                                        appPreferences.downloadSharedFolder,
+                                                    onClick = { requestAllFilesAccessIfNeeded() },
+                                                ),
                                                 PreferenceIntInput(
                                                     nameStringResource = R.string.pref_download_max_concurrent,
                                                     backendPreference =
@@ -1035,6 +1049,23 @@ class SettingsViewModel @Inject constructor(
                     )
             ),
         )
+
+    // Findroid BE: "Save to Movies/Findroid" needs All files access; ask for it when turned on.
+    private fun requestAllFilesAccessIfNeeded() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return
+        if (!appPreferences.getValue(appPreferences.downloadSharedFolder)) return
+        if (Environment.isExternalStorageManager()) return
+        viewModelScope.launch {
+            eventsChannel.send(
+                SettingsEvent.LaunchIntent(
+                    Intent(
+                        Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
+                        Uri.parse("package:${context.packageName}"),
+                    )
+                )
+            )
+        }
+    }
 
     private fun getStorageOptions(): List<Pair<String?, String>> {
         val dirs = context.getExternalFilesDirs(null)

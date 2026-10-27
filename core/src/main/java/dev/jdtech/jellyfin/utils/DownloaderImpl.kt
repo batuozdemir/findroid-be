@@ -203,7 +203,15 @@ class DownloaderImpl(
             )
             val extension = guessExtension(source.path)
             val relativePath = buildDownloadPath(item, source.id, extension)
-            val destFile = File(storageLocation, "downloads/$relativePath.download")
+            val sharedFolder = appPreferences.getValue(appPreferences.downloadSharedFolder)
+            if (sharedFolder && !hasAllFilesAccess()) {
+                return@coroutineScope Pair(
+                    -1,
+                    UiText.StringResource(CoreR.string.all_files_access_needed),
+                )
+            }
+            val destFile =
+                File(downloadsFolder(storageLocation, sharedFolder), "$relativePath.download")
             destFile.parentFile?.mkdirs()
             // A leftover .download file from a previous failed/cancelled attempt with no DB
             // row is an orphan. Drop it before starting so the engine starts at byte 0.
@@ -372,7 +380,7 @@ class DownloaderImpl(
      */
     private fun pruneEmptyParents(file: File) {
         var dir = file.parentFile ?: return
-        while (dir.name != "downloads" && dir.listFiles()?.isEmpty() == true) {
+        while (!isDownloadsRoot(dir) && dir.listFiles()?.isEmpty() == true) {
             dir.delete()
             dir = dir.parentFile ?: return
         }
@@ -434,7 +442,11 @@ class DownloaderImpl(
             ?.takeIf { Environment.getExternalStorageState(it) == Environment.MEDIA_MOUNTED }
             ?: dirs.getOrNull(0)?.takeIf { Environment.getExternalStorageState(it) == Environment.MEDIA_MOUNTED }
             ?: return
-        val downloadsDir = File(storageLocation, "downloads")
+        val downloadsDir =
+            downloadsFolder(
+                storageLocation,
+                appPreferences.getValue(appPreferences.downloadSharedFolder),
+            )
         downloadsDir.mkdirs()
 
         // Fresh pass only: this is reached when no in-progress source row exists for the
@@ -772,7 +784,15 @@ class DownloaderImpl(
         val mountedRoots = context.getExternalFilesDirs(null)
             .filterNotNull()
             .filter { Environment.getExternalStorageState(it) == Environment.MEDIA_MOUNTED }
-            .map { File(it, "downloads").absolutePath }
+            .flatMap { dir ->
+                // Findroid BE: Movies/Findroid only while it is readable; without All files
+                // access its files would look missing and be swept from the library.
+                listOfNotNull(
+                    downloadsFolder(dir, sharedFolder = false),
+                    downloadsFolder(dir, sharedFolder = true).takeIf { hasAllFilesAccess() },
+                )
+            }
+            .map { it.absolutePath }
 
         val knownPaths = mutableSetOf<String>()
         suspend fun remember(source: FindroidSourceDto) {
