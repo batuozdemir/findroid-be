@@ -15,6 +15,7 @@ import android.os.Handler
 import android.os.Looper
 import android.os.Process
 import android.util.Rational
+import android.view.KeyEvent
 import android.view.SurfaceView
 import android.view.View
 import android.view.WindowManager
@@ -393,6 +394,12 @@ class PlayerActivity : BasePlayerActivity() {
             startFromBeginning = startFromBeginning,
         )
         hideSystemUI()
+    }
+
+    // Findroid BE: the volume keys reach into the volume boost (see PlayerGestureHelper)
+    override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
+        if (playerGestureHelper?.onVolumeKey(keyCode) == true) return true
+        return super.onKeyDown(keyCode, event)
     }
 
     override fun onNewIntent(intent: Intent) {

@@ -29,6 +29,12 @@ class AppPreferences @Inject constructor(val sharedPreferences: SharedPreference
     val playerBackend = Preference("pref_player_backend", "exoplayer")
     val playerBrightness = Preference("pref_player_brightness", -1.0f)
 
+    // Findroid BE: highest volume the swipe and the volume keys reach, in percent. Above 100 the
+    // player amplifies the audio once the system volume is at its maximum.
+    val playerMaxVolume = Preference("pref_player_max_volume", "200")
+    // Findroid BE: the last volume boost, restored when the next video starts
+    val playerVolumeBoost = Preference("pref_player_volume_boost", 1f)
+
     // Maximum streaming bitrate in bits per second; the server transcodes
     // anything above it. 0 means no cap (original quality). Set from the
     // player's quality selector.
