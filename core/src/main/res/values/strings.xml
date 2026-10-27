@@ -142,6 +142,7 @@
     <string name="delete_all_downloads_message">Remove every downloaded movie and episode (%1$s) from this device?</string>
     <string name="remove_all">Remove all</string>
     <string name="remove_season_download">Remove %1$s</string>
+    <string name="remove_season_download_message">Remove the downloaded episodes of %1$s (%2$s) from this device?</string>
     <plurals name="downloaded_episodes_count">
         <item quantity="one">%d episode</item>
         <item quantity="other">%d episodes</item>

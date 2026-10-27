@@ -263,9 +263,37 @@ private fun DeleteSeasonsDialog(
     onDismiss: () -> Unit,
 ) {
     val context = LocalContext.current
-    // Hide a season as soon as it's tapped, so a second tap can't delete it twice
+    // Hide a season as soon as its delete is confirmed, so it can't be deleted twice
     // before the list reloads.
     var removed by remember { mutableStateOf(emptySet<java.util.UUID>()) }
+    var pendingSeason by remember { mutableStateOf<DownloadedSeason?>(null) }
+    pendingSeason?.let { season ->
+        AlertDialog(
+            onDismissRequest = { pendingSeason = null },
+            confirmButton = {
+                TextButton(onClick = {
+                    pendingSeason = null
+                    removed = removed + season.id
+                    onSeasonDelete(season)
+                }) { Text(stringResource(CoreR.string.remove)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingSeason = null }) {
+                    Text(stringResource(CoreR.string.cancel))
+                }
+            },
+            title = { Text(stringResource(CoreR.string.remove_season_download, season.name)) },
+            text = {
+                Text(
+                    stringResource(
+                        CoreR.string.remove_season_download_message,
+                        season.name,
+                        Formatter.formatShortFileSize(context, season.sizeBytes),
+                    )
+                )
+            },
+        )
+    }
     AlertDialog(
         onDismissRequest = onDismiss,
         confirmButton = {
@@ -295,10 +323,7 @@ private fun DeleteSeasonsDialog(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
-                        IconButton(onClick = {
-                            removed = removed + season.id
-                            onSeasonDelete(season)
-                        }) {
+                        IconButton(onClick = { pendingSeason = season }) {
                             Icon(
                                 painter = painterResource(CoreR.drawable.ic_trash),
                                 contentDescription =
